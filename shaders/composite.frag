@@ -9,6 +9,7 @@ uniform sampler2D uBloomColor;
 uniform sampler2D uReferenceColor;
 uniform float uExposure;
 uniform float uSplitPosition;
+uniform int uHasReference;
 
 vec3 ToneMap(vec3 color)
 {
@@ -28,7 +29,9 @@ float Vignette(vec2 uv)
 void main()
 {
     vec3 realtimeColor = texture(uSceneColor, vTexCoord).rgb + texture(uBloomColor, vTexCoord).rgb;
-    vec3 referenceColor = texture(uReferenceColor, vTexCoord).rgb;
+    vec3 referenceColor = uHasReference == 1
+        ? texture(uReferenceColor, vTexCoord).rgb
+        : realtimeColor;
 
     realtimeColor = ToneMap(realtimeColor);
     referenceColor = ToneMap(referenceColor);
@@ -38,11 +41,6 @@ void main()
     referenceColor *= vignette;
 
     vec3 color = vTexCoord.x < uSplitPosition ? realtimeColor : referenceColor;
-
-    if (abs(vTexCoord.x - uSplitPosition) < 0.0015)
-    {
-        color = mix(color, vec3(1.0, 0.9, 0.25), 0.9);
-    }
 
     FragColor = vec4(color, 1.0);
 }
