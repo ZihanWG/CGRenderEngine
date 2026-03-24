@@ -1,0 +1,40 @@
+#include "Renderer/VertexArray.h"
+#include "Renderer/VertexBuffer.h"
+#include "Renderer/IndexBuffer.h"
+#include <glad/glad.h>
+
+VertexArray::VertexArray()
+{
+    glGenVertexArrays(1, &m_ID);
+}
+
+VertexArray::~VertexArray()
+{
+    if (m_ID)
+        glDeleteVertexArrays(1, &m_ID);
+}
+
+void VertexArray::Bind() const
+{
+    glBindVertexArray(m_ID);
+}
+
+void VertexArray::Unbind() const
+{
+    glBindVertexArray(0);
+}
+
+void VertexArray::AddVertexBuffer_Position3f(const VertexBuffer& vbo)
+{
+    Bind();
+    vbo.Bind();
+
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+}
+
+void VertexArray::SetIndexBuffer(const IndexBuffer& ibo)
+{
+    Bind();
+    ibo.Bind();
+}
