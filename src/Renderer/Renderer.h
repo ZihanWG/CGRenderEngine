@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <future>
 #include <memory>
 
 #include <glm/glm.hpp>
@@ -36,6 +37,8 @@ private:
     int m_LastBlurTextureIndex = 0;
     bool m_Initialized = false;
     bool m_ReferenceDirty = true;
+    bool m_RayTraceInFlight = false;
+    bool m_HasReference = false;
     float m_Exposure = 1.05f;
     float m_SplitPosition = 0.5f;
     int m_BloomPasses = 6;
@@ -59,4 +62,6 @@ private:
 
     RayTracer m_RayTracer;
     RayTraceSettings m_RayTraceSettings;
+    RayTraceSettings m_ActiveRayTraceSettings;
+    std::future<std::vector<glm::vec3>> m_RayTraceFuture;
 };

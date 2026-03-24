@@ -1,6 +1,7 @@
 #include "Renderer/Renderer.h"
 
 #include <algorithm>
+#include <chrono>
 #include <stdexcept>
 #include <vector>
 
@@ -15,7 +16,7 @@
 
 Renderer::Renderer()
 {
-    m_RayTraceSettings.samplesPerPixel = 4;
+    m_RayTraceSettings.samplesPerPixel = 2;
     m_RayTraceSettings.maxBounces = 1;
 }
 
@@ -74,6 +75,7 @@ void Renderer::CreateShaders()
     m_CompositeShader->SetInt("uSceneColor", 0);
     m_CompositeShader->SetInt("uBloomColor", 1);
     m_CompositeShader->SetInt("uReferenceColor", 2);
+    m_CompositeShader->SetInt("uHasReference", 0);
 }
 
 void Renderer::CreateRenderTargets(int width, int height)
@@ -131,6 +133,7 @@ void Renderer::CreateRenderTargets(int width, int height)
 
     Framebuffer::Unbind();
     m_ReferenceDirty = true;
+    m_HasReference = false;
 }
 
 void Renderer::EnsureRenderTargets(int width, int height)
@@ -254,10 +257,18 @@ void Renderer::RenderCompositePass()
     m_CompositeShader->Use();
     m_CompositeShader->SetFloat("uExposure", m_Exposure);
     m_CompositeShader->SetFloat("uSplitPosition", m_SplitPosition);
+    m_CompositeShader->SetInt("uHasReference", m_HasReference ? 1 : 0);
 
     m_HDRColorTexture.Bind(0);
     m_BlurTextures[m_LastBlurTextureIndex].Bind(1);
-    m_ReferenceTexture.Bind(2);
+    if (m_HasReference)
+    {
+        m_ReferenceTexture.Bind(2);
+    }
+    else
+    {
+        m_HDRColorTexture.Bind(2);
+    }
     m_FullscreenQuad->Draw();
 
     glEnable(GL_DEPTH_TEST);
@@ -265,24 +276,49 @@ void Renderer::RenderCompositePass()
 
 void Renderer::BakeReference(const Scene& scene, const Camera& camera)
 {
+    using namespace std::chrono_literals;
+
+    if (m_RayTraceInFlight &&
+        m_RayTraceFuture.valid() &&
+        m_RayTraceFuture.wait_for(0ms) == std::future_status::ready)
+    {
+        const std::vector<glm::vec3> pixels = m_RayTraceFuture.get();
+        m_ReferenceTexture.Allocate(
+            m_ActiveRayTraceSettings.width,
+            m_ActiveRayTraceSettings.height,
+            GL_RGB16F,
+            GL_RGB,
+            GL_FLOAT,
+            pixels.data()
+        );
+
+        m_RayTraceInFlight = false;
+        m_HasReference = true;
+    }
+
+    if (m_RayTraceInFlight || !m_ReferenceDirty)
+    {
+        return;
+    }
+
     const float aspectRatio = static_cast<float>(m_ViewportWidth) / static_cast<float>(std::max(m_ViewportHeight, 1));
-    m_RayTraceSettings.width = std::clamp(m_ViewportWidth / 2, 320, 480);
-    m_RayTraceSettings.height = std::max(
-        180,
-        static_cast<int>(static_cast<float>(m_RayTraceSettings.width) / aspectRatio)
+    m_ActiveRayTraceSettings = m_RayTraceSettings;
+    m_ActiveRayTraceSettings.width = std::clamp(m_ViewportWidth / 3, 200, 320);
+    m_ActiveRayTraceSettings.height = std::max(
+        120,
+        static_cast<int>(static_cast<float>(m_ActiveRayTraceSettings.width) / aspectRatio)
     );
 
-    const std::vector<glm::vec3> pixels = m_RayTracer.Render(scene, camera, m_RayTraceSettings);
-    m_ReferenceTexture.Allocate(
-        m_RayTraceSettings.width,
-        m_RayTraceSettings.height,
-        GL_RGB16F,
-        GL_RGB,
-        GL_FLOAT,
-        pixels.data()
-    );
+    const Scene sceneCopy = scene;
+    const Camera cameraCopy = camera;
+    const RayTraceSettings settings = m_ActiveRayTraceSettings;
 
     m_ReferenceDirty = false;
+    m_RayTraceInFlight = true;
+    m_RayTraceFuture = std::async(std::launch::async, [sceneCopy, cameraCopy, settings]() {
+        RayTracer rayTracer;
+        return rayTracer.Render(sceneCopy, cameraCopy, settings);
+    });
 }
 
 glm::mat4 Renderer::CalculateLightSpaceMatrix(const Scene& scene) const
