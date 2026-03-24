@@ -1,0 +1,10 @@
+{
+	"InstallScripts" : 
+	[
+		"E:/CGEngine/build/cmake_install.cmake",
+		"E:/CGEngine/build/external/glfw/cmake_install.cmake",
+		"E:/CGEngine/build/external/glfw/src/cmake_install.cmake",
+		"E:/CGEngine/build/external/glfw/docs/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

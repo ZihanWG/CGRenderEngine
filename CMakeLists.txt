@@ -6,19 +6,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-file(GLOB_RECURSE SRC_FILES
+file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS
         src/*.cpp
 )
 
-add_executable(RealtimeRenderer ${SRC_FILES}
-        src/Renderer/VertexBuffer.cpp
-        src/Renderer/VertexBuffer.h
-        src/Renderer/IndexBuffer.cpp
-        src/Renderer/IndexBuffer.h
-        src/Renderer/VertexArray.cpp
-        src/Renderer/VertexArray.h
-        src/Renderer/Mesh.cpp
-        src/Renderer/Mesh.h)
+add_executable(RealtimeRenderer ${SRC_FILES})
 
 target_include_directories(RealtimeRenderer PRIVATE
         src
@@ -28,10 +20,13 @@ target_include_directories(RealtimeRenderer PRIVATE
 
 add_subdirectory(external/glfw)
 
-add_library(glad external/glad/src/glad.c
-        src/Scene/Transform.h
-        src/Scene/Camera.h)
+add_library(glad external/glad/src/glad.c)
 target_include_directories(glad PUBLIC external/glad/include)
+
+file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}" CGENGINE_ASSET_ROOT_PATH)
+target_compile_definitions(RealtimeRenderer PRIVATE
+        CGENGINE_ASSET_ROOT="${CGENGINE_ASSET_ROOT_PATH}"
+)
 
 target_link_libraries(RealtimeRenderer PRIVATE glfw glad)
 

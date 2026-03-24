@@ -1,0 +1,10 @@
+^E:\CGENGINE\BUILD\CMAKEFILES\3955502A64B01B50CDC55870E49AA1F7\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -SE:/CGEngine -BE:/CGEngine/build --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file E:/CGEngine/build/RealtimeRenderer.slnx
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
