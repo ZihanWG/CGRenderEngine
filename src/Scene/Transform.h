@@ -1,8 +1,12 @@
-//
-// Created by w1594 on 2026/3/24.
-//
+#pragma once
 
-#ifndef REALTIMERENDERER_TRANSFORM_H
-#define REALTIMERENDERER_TRANSFORM_H
+#include <glm/glm.hpp>
 
-#endif //REALTIMERENDERER_TRANSFORM_H
+struct Transform
+{
+    glm::vec3 position{0.0f};
+    glm::vec3 rotationDegrees{0.0f};
+    glm::vec3 scale{1.0f};
+
+    glm::mat4 GetMatrix() const;
+};

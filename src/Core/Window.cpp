@@ -1,17 +1,13 @@
 #include "Core/Window.h"
 
-#include <stdexcept>
 #include <iostream>
+#include <stdexcept>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-static void FramebufferSizeCallback(GLFWwindow* window, int width, int height)
-{
-    glViewport(0, 0, width, height);
-}
-
 Window::Window(int width, int height, const char* title)
+    : m_Width(width), m_Height(height)
 {
     if (!glfwInit())
     {
@@ -30,6 +26,8 @@ Window::Window(int width, int height, const char* title)
     }
 
     glfwMakeContextCurrent(m_Window);
+    glfwSwapInterval(1);
+    glfwSetWindowUserPointer(m_Window, this);
     glfwSetFramebufferSizeCallback(m_Window, FramebufferSizeCallback);
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
@@ -58,6 +56,11 @@ bool Window::ShouldClose() const
     return glfwWindowShouldClose(m_Window);
 }
 
+void Window::RequestClose()
+{
+    glfwSetWindowShouldClose(m_Window, GLFW_TRUE);
+}
+
 void Window::PollEvents()
 {
     glfwPollEvents();
@@ -66,4 +69,35 @@ void Window::PollEvents()
 void Window::SwapBuffers()
 {
     glfwSwapBuffers(m_Window);
+}
+
+float Window::GetAspectRatio() const
+{
+    return m_Height > 0 ? static_cast<float>(m_Width) / static_cast<float>(m_Height) : 1.0f;
+}
+
+bool Window::ConsumeResizeFlag()
+{
+    const bool wasResized = m_WasResized;
+    m_WasResized = false;
+    return wasResized;
+}
+
+double Window::GetTimeSeconds()
+{
+    return glfwGetTime();
+}
+
+void Window::FramebufferSizeCallback(GLFWwindow* window, int width, int height)
+{
+    auto* instance = static_cast<Window*>(glfwGetWindowUserPointer(window));
+    if (!instance)
+    {
+        return;
+    }
+
+    instance->m_Width = width;
+    instance->m_Height = height;
+    instance->m_WasResized = true;
+    glViewport(0, 0, width, height);
 }

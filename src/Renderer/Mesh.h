@@ -1,24 +1,44 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <vector>
 
-class VertexArray;
-class VertexBuffer;
-class IndexBuffer;
+#include <glm/glm.hpp>
+
+struct Vertex
+{
+    glm::vec3 position{0.0f};
+    glm::vec3 normal{0.0f, 1.0f, 0.0f};
+    glm::vec2 texCoord{0.0f};
+};
 
 class Mesh
 {
 public:
-    Mesh(const std::vector<float>& vertices,
-         const std::vector<unsigned int>& indices);
+    Mesh(std::vector<Vertex> vertices,
+         std::vector<std::uint32_t> indices);
     ~Mesh();
+
+    Mesh(const Mesh&) = delete;
+    Mesh& operator=(const Mesh&) = delete;
 
     void Draw() const;
 
+    const std::vector<Vertex>& GetVertices() const { return m_Vertices; }
+    const std::vector<std::uint32_t>& GetIndices() const { return m_Indices; }
+
+    static std::shared_ptr<Mesh> CreateCube(float size = 1.0f);
+    static std::shared_ptr<Mesh> CreatePlane(float size = 1.0f, float uvScale = 1.0f);
+    static std::shared_ptr<Mesh> CreateSphere(float radius = 1.0f, int xSegments = 24, int ySegments = 16);
+    static std::shared_ptr<Mesh> CreateFullscreenQuad();
+
 private:
-    std::unique_ptr<VertexArray> m_VAO;
-    std::unique_ptr<VertexBuffer> m_VBO;
-    std::unique_ptr<IndexBuffer> m_IBO;
-    unsigned int m_IndexCount = 0;
+    void Upload();
+
+    unsigned int m_VAO = 0;
+    unsigned int m_VBO = 0;
+    unsigned int m_EBO = 0;
+    std::vector<Vertex> m_Vertices;
+    std::vector<std::uint32_t> m_Indices;
 };
