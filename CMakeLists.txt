@@ -16,6 +16,7 @@ target_include_directories(RealtimeRenderer PRIVATE
         src
         external/glad/include
         external/glm
+        external/tinygltf
 )
 
 add_subdirectory(external/glfw)

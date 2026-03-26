@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+#include <memory>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -18,9 +20,18 @@ struct RayTraceSettings
 class RayTracer
 {
 public:
+    RayTracer();
+    ~RayTracer();
+
     std::vector<glm::vec3> Render(
         const Scene& scene,
         const Camera& camera,
         const RayTraceSettings& settings
-    ) const;
+    );
+
+private:
+    struct CachedAcceleration;
+    const CachedAcceleration& GetCachedAcceleration(const Scene& scene);
+
+    std::unique_ptr<CachedAcceleration> m_CachedAcceleration;
 };

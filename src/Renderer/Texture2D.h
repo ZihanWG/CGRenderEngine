@@ -25,6 +25,7 @@ public:
     );
 
     void SetData(GLenum format, GLenum type, const void* data) const;
+    void GenerateMipmaps() const;
     void SetBorderColor(float r, float g, float b, float a) const;
     void Bind(unsigned int slot) const;
 
