@@ -4,6 +4,11 @@
 
 glm::mat4 Transform::GetMatrix() const
 {
+    if (useMatrixOverride)
+    {
+        return matrixOverride;
+    }
+
     glm::mat4 model(1.0f);
     model = glm::translate(model, position);
     model = glm::rotate(model, glm::radians(rotationDegrees.x), glm::vec3(1.0f, 0.0f, 0.0f));

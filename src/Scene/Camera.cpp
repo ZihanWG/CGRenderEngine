@@ -18,11 +18,43 @@ Camera::Camera(
       m_NearClip(nearClip),
       m_FarClip(farClip)
 {
+    const glm::vec3 forward = glm::normalize(m_Target - m_Position);
+    m_YawDegrees = glm::degrees(glm::atan(forward.z, forward.x));
+    m_PitchDegrees = glm::degrees(glm::asin(glm::clamp(forward.y, -1.0f, 1.0f)));
+    UpdateTarget();
 }
 
 void Camera::SetAspectRatio(float aspectRatio)
 {
     m_AspectRatio = aspectRatio;
+}
+
+void Camera::MoveForward(float distance)
+{
+    const glm::vec3 offset = GetForward() * distance;
+    m_Position += offset;
+    m_Target += offset;
+}
+
+void Camera::MoveRight(float distance)
+{
+    const glm::vec3 offset = GetRight() * distance;
+    m_Position += offset;
+    m_Target += offset;
+}
+
+void Camera::MoveUp(float distance)
+{
+    const glm::vec3 offset = m_WorldUp * distance;
+    m_Position += offset;
+    m_Target += offset;
+}
+
+void Camera::Rotate(float yawOffsetDegrees, float pitchOffsetDegrees)
+{
+    m_YawDegrees += yawOffsetDegrees;
+    m_PitchDegrees = glm::clamp(m_PitchDegrees + pitchOffsetDegrees, -89.0f, 89.0f);
+    UpdateTarget();
 }
 
 glm::mat4 Camera::GetViewMatrix() const
@@ -61,4 +93,18 @@ glm::vec3 Camera::GenerateRayDirection(float u, float v) const
     const float px = (2.0f * u - 1.0f) * m_AspectRatio * tanHalfFov;
     const float py = (2.0f * v - 1.0f) * tanHalfFov;
     return glm::normalize(GetForward() + px * GetRight() + py * GetUp());
+}
+
+void Camera::UpdateTarget()
+{
+    const float yawRadians = glm::radians(m_YawDegrees);
+    const float pitchRadians = glm::radians(m_PitchDegrees);
+
+    const glm::vec3 forward(
+        glm::cos(yawRadians) * glm::cos(pitchRadians),
+        glm::sin(pitchRadians),
+        glm::sin(yawRadians) * glm::cos(pitchRadians)
+    );
+
+    m_Target = m_Position + glm::normalize(forward);
 }

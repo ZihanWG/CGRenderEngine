@@ -1,10 +1,22 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
+    <ClCompile Include="E:\CGEngine\src\Assets\GLTFLoader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="E:\CGEngine\src\Core\Application.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="E:\CGEngine\src\Core\Window.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\CGEngine\src\Renderer\BloomPass.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\CGEngine\src\Renderer\CompositePass.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\CGEngine\src\Renderer\EnvironmentLighting.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="E:\CGEngine\src\Renderer\Framebuffer.cpp">
@@ -22,7 +34,13 @@
     <ClCompile Include="E:\CGEngine\src\Renderer\Renderer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="E:\CGEngine\src\Renderer\ScenePass.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="E:\CGEngine\src\Renderer\Shader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\CGEngine\src\Renderer\ShadowPass.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="E:\CGEngine\src\Renderer\Texture2D.cpp">
@@ -35,6 +53,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="E:\CGEngine\src\Scene\Camera.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\CGEngine\src\Scene\Material.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="E:\CGEngine\src\Scene\Scene.cpp">

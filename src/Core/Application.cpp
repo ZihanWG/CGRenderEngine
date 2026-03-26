@@ -1,7 +1,12 @@
 #include "Core/Application.h"
 
+#include <iostream>
+
 #include <GLFW/glfw3.h>
 
+#include <glm/gtc/matrix_transform.hpp>
+
+#include "Assets/GLTFLoader.h"
 #include "Renderer/Mesh.h"
 
 Application::Application(int width, int height, const char* title)
@@ -20,6 +25,7 @@ Application::Application(int width, int height, const char* title)
 
     m_Renderer = std::make_unique<Renderer>();
     m_Renderer->Initialize(m_Window->GetWidth(), m_Window->GetHeight());
+    PrintControls();
 }
 
 Application::~Application() = default;
@@ -31,17 +37,18 @@ void Application::Run()
     while (!m_Window->ShouldClose())
     {
         m_Window->PollEvents();
-        HandleInput();
 
         if (m_Window->ConsumeResizeFlag())
         {
             m_Camera->SetAspectRatio(m_Window->GetAspectRatio());
+            m_Renderer->InvalidateReference();
         }
 
         const double currentTime = Window::GetTimeSeconds();
-        const double deltaTime = currentTime - lastTime;
-        (void)deltaTime;
+        const float deltaTime = static_cast<float>(currentTime - lastTime);
         lastTime = currentTime;
+
+        HandleInput(deltaTime);
 
         m_Renderer->RenderFrame(
             m_Scene,
@@ -129,6 +136,23 @@ Scene Application::BuildDemoScene() const
     }
 
     {
+        GLTFLoader loader;
+        std::string errorMessage;
+        const glm::mat4 rootTransform =
+            glm::translate(glm::mat4(1.0f), glm::vec3(-5.0f, 0.75f, 2.2f)) *
+            glm::scale(glm::mat4(1.0f), glm::vec3(1.6f));
+
+        if (!loader.LoadModelIntoScene("assets/models/BoxTextured.glb", scene, rootTransform, &errorMessage))
+        {
+            std::cerr << "[Assets] Failed to load BoxTextured.glb: " << errorMessage << std::endl;
+        }
+        else
+        {
+            std::cout << "[Assets] Loaded BoxTextured.glb" << std::endl;
+        }
+    }
+
+    {
         RenderObject object;
         object.name = "Emitter";
         object.mesh = cube;
@@ -144,10 +168,203 @@ Scene Application::BuildDemoScene() const
     return scene;
 }
 
-void Application::HandleInput()
+void Application::HandleInput(float deltaTime)
 {
-    if (glfwGetKey(m_Window->GetNativeHandle(), GLFW_KEY_ESCAPE) == GLFW_PRESS)
+    GLFWwindow* nativeWindow = m_Window->GetNativeHandle();
+    bool referenceDirty = false;
+
+    if (glfwGetKey(nativeWindow, GLFW_KEY_ESCAPE) == GLFW_PRESS)
     {
         m_Window->RequestClose();
     }
+
+    const float moveSpeed = glfwGetKey(nativeWindow, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ? 8.0f : 4.0f;
+    const float moveDistance = moveSpeed * deltaTime;
+
+    if (glfwGetKey(nativeWindow, GLFW_KEY_W) == GLFW_PRESS)
+    {
+        m_Camera->MoveForward(moveDistance);
+        referenceDirty = true;
+    }
+    if (glfwGetKey(nativeWindow, GLFW_KEY_S) == GLFW_PRESS)
+    {
+        m_Camera->MoveForward(-moveDistance);
+        referenceDirty = true;
+    }
+    if (glfwGetKey(nativeWindow, GLFW_KEY_A) == GLFW_PRESS)
+    {
+        m_Camera->MoveRight(-moveDistance);
+        referenceDirty = true;
+    }
+    if (glfwGetKey(nativeWindow, GLFW_KEY_D) == GLFW_PRESS)
+    {
+        m_Camera->MoveRight(moveDistance);
+        referenceDirty = true;
+    }
+    if (glfwGetKey(nativeWindow, GLFW_KEY_Q) == GLFW_PRESS)
+    {
+        m_Camera->MoveUp(-moveDistance);
+        referenceDirty = true;
+    }
+    if (glfwGetKey(nativeWindow, GLFW_KEY_E) == GLFW_PRESS)
+    {
+        m_Camera->MoveUp(moveDistance);
+        referenceDirty = true;
+    }
+
+    const bool shouldCaptureMouse = glfwGetMouseButton(nativeWindow, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
+    if (shouldCaptureMouse != m_CaptureMouse)
+    {
+        m_CaptureMouse = shouldCaptureMouse;
+        m_FirstMouseSample = true;
+        glfwSetInputMode(
+            nativeWindow,
+            GLFW_CURSOR,
+            m_CaptureMouse ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL
+        );
+    }
+
+    if (m_CaptureMouse)
+    {
+        double cursorX = 0.0;
+        double cursorY = 0.0;
+        glfwGetCursorPos(nativeWindow, &cursorX, &cursorY);
+
+        if (m_FirstMouseSample)
+        {
+            m_LastCursorX = cursorX;
+            m_LastCursorY = cursorY;
+            m_FirstMouseSample = false;
+        }
+        else
+        {
+            const float deltaX = static_cast<float>(cursorX - m_LastCursorX);
+            const float deltaY = static_cast<float>(m_LastCursorY - cursorY);
+            m_LastCursorX = cursorX;
+            m_LastCursorY = cursorY;
+
+            if (deltaX != 0.0f || deltaY != 0.0f)
+            {
+                m_Camera->Rotate(deltaX * 0.12f, deltaY * 0.12f);
+                referenceDirty = true;
+            }
+        }
+    }
+
+    RenderSettings settings = m_Renderer->GetSettings();
+    bool settingsChanged = false;
+
+    if (ConsumeToggleKey(GLFW_KEY_B, m_BloomToggleLatch))
+    {
+        settings.enableBloom = !settings.enableBloom;
+        settingsChanged = true;
+        std::cout << "[Render] Bloom " << (settings.enableBloom ? "On" : "Off") << std::endl;
+    }
+
+    if (ConsumeToggleKey(GLFW_KEY_N, m_ShadowToggleLatch))
+    {
+        settings.enableShadows = !settings.enableShadows;
+        settingsChanged = true;
+        std::cout << "[Render] Shadows " << (settings.enableShadows ? "On" : "Off") << std::endl;
+    }
+
+    if (ConsumeToggleKey(GLFW_KEY_M, m_IBLToggleLatch))
+    {
+        settings.enableIBL = !settings.enableIBL;
+        settingsChanged = true;
+        std::cout << "[Render] IBL " << (settings.enableIBL ? "On" : "Off") << std::endl;
+    }
+
+    if (ConsumeToggleKey(GLFW_KEY_C, m_ReferenceToggleLatch))
+    {
+        settings.enableReferenceComparison = !settings.enableReferenceComparison;
+        settingsChanged = true;
+        std::cout << "[Render] Reference Comparison "
+                  << (settings.enableReferenceComparison ? "On" : "Off")
+                  << std::endl;
+    }
+
+    if (ConsumeToggleKey(GLFW_KEY_R, m_RebakeLatch))
+    {
+        m_Renderer->InvalidateReference();
+        std::cout << "[Render] Queued reference rebake" << std::endl;
+    }
+
+    const auto setDebugView = [&](int key, std::size_t index, DebugViewMode mode, const char* label) {
+        if (ConsumeToggleKey(key, m_DebugViewLatches[index]))
+        {
+            settings.debugView = mode;
+            settingsChanged = true;
+            std::cout << "[Render] Debug View -> " << label << std::endl;
+        }
+    };
+
+    setDebugView(GLFW_KEY_1, 0, DebugViewMode::Final, "Final");
+    setDebugView(GLFW_KEY_2, 1, DebugViewMode::SceneColor, "SceneColor");
+    setDebugView(GLFW_KEY_3, 2, DebugViewMode::BrightColor, "BrightColor");
+    setDebugView(GLFW_KEY_4, 3, DebugViewMode::Albedo, "Albedo");
+    setDebugView(GLFW_KEY_5, 4, DebugViewMode::Normal, "Normal");
+    setDebugView(GLFW_KEY_6, 5, DebugViewMode::Material, "Material");
+    setDebugView(GLFW_KEY_7, 6, DebugViewMode::Depth, "Depth");
+    setDebugView(GLFW_KEY_8, 7, DebugViewMode::Shadow, "Shadow");
+
+    const float exposureStep = deltaTime * 0.85f;
+    const float splitStep = deltaTime * 0.45f;
+
+    if (glfwGetKey(nativeWindow, GLFW_KEY_EQUAL) == GLFW_PRESS || glfwGetKey(nativeWindow, GLFW_KEY_KP_ADD) == GLFW_PRESS)
+    {
+        settings.exposure += exposureStep;
+        settingsChanged = true;
+    }
+    if (glfwGetKey(nativeWindow, GLFW_KEY_MINUS) == GLFW_PRESS || glfwGetKey(nativeWindow, GLFW_KEY_KP_SUBTRACT) == GLFW_PRESS)
+    {
+        settings.exposure -= exposureStep;
+        settingsChanged = true;
+    }
+    if (glfwGetKey(nativeWindow, GLFW_KEY_LEFT_BRACKET) == GLFW_PRESS)
+    {
+        settings.splitPosition -= splitStep;
+        settingsChanged = true;
+    }
+    if (glfwGetKey(nativeWindow, GLFW_KEY_RIGHT_BRACKET) == GLFW_PRESS)
+    {
+        settings.splitPosition += splitStep;
+        settingsChanged = true;
+    }
+
+    if (settingsChanged)
+    {
+        m_Renderer->SetSettings(settings);
+    }
+
+    if (referenceDirty)
+    {
+        m_Renderer->InvalidateReference();
+    }
+}
+
+void Application::PrintControls() const
+{
+    std::cout
+        << "Controls:\n"
+        << "  WASD/QE: move camera\n"
+        << "  Right Mouse: look around\n"
+        << "  Shift: move faster\n"
+        << "  B: toggle bloom\n"
+        << "  N: toggle shadows\n"
+        << "  M: toggle IBL\n"
+        << "  C: toggle realtime/reference split compare\n"
+        << "  R: rebake ray-traced reference\n"
+        << "  1-8: switch final / scene / bright / albedo / normal / material / depth / shadow views\n"
+        << "  +/-: adjust exposure\n"
+        << "  [ / ]: adjust split position\n"
+        << "  Esc: quit\n";
+}
+
+bool Application::ConsumeToggleKey(int key, bool& latch) const
+{
+    const bool isPressed = glfwGetKey(m_Window->GetNativeHandle(), key) == GLFW_PRESS;
+    const bool triggered = isPressed && !latch;
+    latch = isPressed;
+    return triggered;
 }

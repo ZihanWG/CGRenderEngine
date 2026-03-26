@@ -21,19 +21,35 @@ struct RenderObject
 class Scene
 {
 public:
+    void MarkDirty();
+    std::size_t GetContentVersion() const { return m_ContentVersion; }
+
     RenderObject& AddObject(RenderObject object);
 
-    std::vector<RenderObject>& GetObjects() { return m_Objects; }
+    std::vector<RenderObject>& GetObjects()
+    {
+        MarkDirty();
+        return m_Objects;
+    }
     const std::vector<RenderObject>& GetObjects() const { return m_Objects; }
 
-    DirectionalLight& GetDirectionalLight() { return m_DirectionalLight; }
+    DirectionalLight& GetDirectionalLight()
+    {
+        MarkDirty();
+        return m_DirectionalLight;
+    }
     const DirectionalLight& GetDirectionalLight() const { return m_DirectionalLight; }
 
-    PointLight& GetPointLight() { return m_PointLight; }
+    PointLight& GetPointLight()
+    {
+        MarkDirty();
+        return m_PointLight;
+    }
     const PointLight& GetPointLight() const { return m_PointLight; }
 
 private:
     std::vector<RenderObject> m_Objects;
     DirectionalLight m_DirectionalLight;
     PointLight m_PointLight;
+    std::size_t m_ContentVersion = 1;
 };

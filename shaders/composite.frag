@@ -7,9 +7,15 @@ in vec2 vTexCoord;
 uniform sampler2D uSceneColor;
 uniform sampler2D uBloomColor;
 uniform sampler2D uReferenceColor;
+uniform sampler2D uAlbedoColor;
+uniform sampler2D uNormalColor;
+uniform sampler2D uMaterialColor;
+uniform sampler2D uDepthTexture;
+uniform sampler2D uShadowMap;
 uniform float uExposure;
 uniform float uSplitPosition;
 uniform int uHasReference;
+uniform int uDebugView;
 
 vec3 ToneMap(vec3 color)
 {
@@ -26,12 +32,67 @@ float Vignette(vec2 uv)
     return clamp(pow(amount, 0.18), 0.0, 1.0);
 }
 
+float LinearizeDepth(float depth)
+{
+    const float nearPlane = 0.1;
+    const float farPlane = 40.0;
+    float z = depth * 2.0 - 1.0;
+    return (2.0 * nearPlane * farPlane) / (farPlane + nearPlane - z * (farPlane - nearPlane));
+}
+
 void main()
 {
-    vec3 realtimeColor = texture(uSceneColor, vTexCoord).rgb + texture(uBloomColor, vTexCoord).rgb;
+    vec3 sceneColor = texture(uSceneColor, vTexCoord).rgb;
+    vec3 bloomColor = texture(uBloomColor, vTexCoord).rgb;
+    vec3 realtimeColor = sceneColor + bloomColor;
     vec3 referenceColor = uHasReference == 1
         ? texture(uReferenceColor, vTexCoord).rgb
         : realtimeColor;
+
+    if (uDebugView == 1)
+    {
+        FragColor = vec4(ToneMap(sceneColor), 1.0);
+        return;
+    }
+
+    if (uDebugView == 2)
+    {
+        FragColor = vec4(ToneMap(bloomColor), 1.0);
+        return;
+    }
+
+    if (uDebugView == 3)
+    {
+        FragColor = vec4(texture(uAlbedoColor, vTexCoord).rgb, 1.0);
+        return;
+    }
+
+    if (uDebugView == 4)
+    {
+        FragColor = vec4(texture(uNormalColor, vTexCoord).rgb, 1.0);
+        return;
+    }
+
+    if (uDebugView == 5)
+    {
+        FragColor = vec4(texture(uMaterialColor, vTexCoord).rgb, 1.0);
+        return;
+    }
+
+    if (uDebugView == 6)
+    {
+        float depth = texture(uDepthTexture, vTexCoord).r;
+        float linearDepth = LinearizeDepth(depth) / 40.0;
+        FragColor = vec4(vec3(clamp(linearDepth, 0.0, 1.0)), 1.0);
+        return;
+    }
+
+    if (uDebugView == 7)
+    {
+        float shadowDepth = texture(uShadowMap, vTexCoord).r;
+        FragColor = vec4(vec3(shadowDepth), 1.0);
+        return;
+    }
 
     realtimeColor = ToneMap(realtimeColor);
     referenceColor = ToneMap(referenceColor);

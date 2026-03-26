@@ -1,13 +1,18 @@
 #pragma once
 
-#include <array>
+#include <cstddef>
 #include <future>
 #include <memory>
+#include <vector>
 
 #include <glm/glm.hpp>
 
-#include "Renderer/Framebuffer.h"
+#include "Renderer/BloomPass.h"
+#include "Renderer/CompositePass.h"
 #include "Renderer/RayTracer.h"
+#include "Renderer/RenderSettings.h"
+#include "Renderer/ScenePass.h"
+#include "Renderer/ShadowPass.h"
 #include "Renderer/Texture2D.h"
 
 class Renderer
@@ -18,50 +23,43 @@ public:
 
     void Initialize(int viewportWidth, int viewportHeight);
     void RenderFrame(const class Scene& scene, const class Camera& camera, int viewportWidth, int viewportHeight);
+    void InvalidateReference();
+
+    const RenderSettings& GetSettings() const { return m_Settings; }
+    void SetSettings(const RenderSettings& settings);
 
 private:
-    void CreateShaders();
-    void CreateRenderTargets(int width, int height);
-    void EnsureRenderTargets(int width, int height);
-    void RenderShadowPass(const class Scene& scene);
-    void RenderScenePass(const class Scene& scene, const class Camera& camera);
-    void RenderBloomPass();
-    void RenderCompositePass();
-    void BakeReference(const class Scene& scene, const class Camera& camera);
-    glm::mat4 CalculateLightSpaceMatrix(const class Scene& scene) const;
+    struct ReferenceFrame
+    {
+        std::vector<glm::vec3> pixels;
+        RayTraceSettings settings;
+        std::size_t revision = 0;
+    };
 
-    static constexpr int kShadowMapSize = 2048;
+    void EnsureRenderTargets(int width, int height);
+    void UpdateReference(const class Scene& scene, const class Camera& camera);
+    glm::mat4 CalculateLightSpaceMatrix(const class Scene& scene) const;
 
     int m_ViewportWidth = 0;
     int m_ViewportHeight = 0;
-    int m_LastBlurTextureIndex = 0;
     bool m_Initialized = false;
     bool m_ReferenceDirty = true;
     bool m_RayTraceInFlight = false;
     bool m_HasReference = false;
-    float m_Exposure = 1.05f;
-    float m_SplitPosition = 0.5f;
-    int m_BloomPasses = 6;
+    std::size_t m_ReferenceRevision = 1;
+    std::size_t m_LastSceneVersion = 0;
     glm::mat4 m_LightSpaceMatrix{1.0f};
 
-    std::unique_ptr<class Shader> m_ShadowShader;
-    std::unique_ptr<class Shader> m_PBRShader;
-    std::unique_ptr<class Shader> m_BlurShader;
-    std::unique_ptr<class Shader> m_CompositeShader;
     std::shared_ptr<class Mesh> m_FullscreenQuad;
 
-    Framebuffer m_ShadowFramebuffer;
-    Framebuffer m_HDRFramebuffer;
-    std::array<Framebuffer, 2> m_BlurFramebuffers;
-
-    Texture2D m_ShadowTexture;
-    Texture2D m_HDRColorTexture;
-    Texture2D m_HDRBrightTexture;
-    std::array<Texture2D, 2> m_BlurTextures;
+    RenderSettings m_Settings;
+    ShadowPass m_ShadowPass;
+    ScenePass m_ScenePass;
+    BloomPass m_BloomPass;
+    CompositePass m_CompositePass;
     Texture2D m_ReferenceTexture;
 
     RayTracer m_RayTracer;
     RayTraceSettings m_RayTraceSettings;
-    RayTraceSettings m_ActiveRayTraceSettings;
-    std::future<std::vector<glm::vec3>> m_RayTraceFuture;
+    std::future<ReferenceFrame> m_RayTraceFuture;
 };

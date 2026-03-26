@@ -2,15 +2,12 @@
 
 #include <algorithm>
 #include <chrono>
-#include <stdexcept>
-#include <vector>
 
 #include <glad/glad.h>
 
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "Renderer/Mesh.h"
-#include "Renderer/Shader.h"
 #include "Scene/Camera.h"
 #include "Scene/Scene.h"
 
@@ -33,9 +30,14 @@ void Renderer::Initialize(int viewportWidth, int viewportHeight)
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
 
+    m_ViewportWidth = std::max(viewportWidth, 1);
+    m_ViewportHeight = std::max(viewportHeight, 1);
+
     m_FullscreenQuad = Mesh::CreateFullscreenQuad();
-    CreateShaders();
-    CreateRenderTargets(viewportWidth, viewportHeight);
+    m_ShadowPass.Initialize();
+    m_ScenePass.Initialize(m_ViewportWidth, m_ViewportHeight);
+    m_BloomPass.Initialize(m_ViewportWidth, m_ViewportHeight);
+    m_CompositePass.Initialize();
     m_Initialized = true;
 }
 
@@ -46,235 +48,77 @@ void Renderer::RenderFrame(const Scene& scene, const Camera& camera, int viewpor
         Initialize(viewportWidth, viewportHeight);
     }
 
+    if (scene.GetContentVersion() != m_LastSceneVersion)
+    {
+        m_LastSceneVersion = scene.GetContentVersion();
+        InvalidateReference();
+    }
+
     EnsureRenderTargets(viewportWidth, viewportHeight);
     m_LightSpaceMatrix = CalculateLightSpaceMatrix(scene);
 
-    RenderShadowPass(scene);
-    RenderScenePass(scene, camera);
-    RenderBloomPass();
-
-    if (m_ReferenceDirty)
-    {
-        BakeReference(scene, camera);
-    }
-
-    RenderCompositePass();
-}
-
-void Renderer::CreateShaders()
-{
-    m_ShadowShader = std::make_unique<Shader>("shaders/shadow.vert", "shaders/shadow.frag");
-    m_PBRShader = std::make_unique<Shader>("shaders/pbr.vert", "shaders/pbr.frag");
-    m_BlurShader = std::make_unique<Shader>("shaders/fullscreen.vert", "shaders/blur.frag");
-    m_CompositeShader = std::make_unique<Shader>("shaders/fullscreen.vert", "shaders/composite.frag");
-
-    m_BlurShader->Use();
-    m_BlurShader->SetInt("uImage", 0);
-
-    m_CompositeShader->Use();
-    m_CompositeShader->SetInt("uSceneColor", 0);
-    m_CompositeShader->SetInt("uBloomColor", 1);
-    m_CompositeShader->SetInt("uReferenceColor", 2);
-    m_CompositeShader->SetInt("uHasReference", 0);
-}
-
-void Renderer::CreateRenderTargets(int width, int height)
-{
-    m_ViewportWidth = std::max(width, 1);
-    m_ViewportHeight = std::max(height, 1);
-
-    m_ShadowTexture.Allocate(
-        kShadowMapSize,
-        kShadowMapSize,
-        GL_DEPTH_COMPONENT32F,
-        GL_DEPTH_COMPONENT,
-        GL_FLOAT,
-        nullptr,
-        GL_NEAREST,
-        GL_NEAREST,
-        GL_CLAMP_TO_BORDER,
-        GL_CLAMP_TO_BORDER
+    m_ShadowPass.Execute(scene, m_LightSpaceMatrix, m_Settings.enableShadows);
+    m_ScenePass.Execute(
+        scene,
+        camera,
+        m_LightSpaceMatrix,
+        m_ShadowPass.GetShadowTexture(),
+        m_Settings
     );
-    m_ShadowTexture.SetBorderColor(1.0f, 1.0f, 1.0f, 1.0f);
+    m_BloomPass.Execute(m_ScenePass.GetBrightTexture(), *m_FullscreenQuad, m_Settings);
+    UpdateReference(scene, camera);
 
-    m_ShadowFramebuffer.Bind();
-    m_ShadowFramebuffer.AttachDepthTexture(m_ShadowTexture);
-    glDrawBuffer(GL_NONE);
-    glReadBuffer(GL_NONE);
-    if (!m_ShadowFramebuffer.CheckComplete())
-    {
-        throw std::runtime_error("Shadow framebuffer is incomplete.");
-    }
-
-    m_HDRColorTexture.Allocate(m_ViewportWidth, m_ViewportHeight, GL_RGBA16F, GL_RGBA, GL_FLOAT);
-    m_HDRBrightTexture.Allocate(m_ViewportWidth, m_ViewportHeight, GL_RGBA16F, GL_RGBA, GL_FLOAT);
-
-    m_HDRFramebuffer.Bind();
-    m_HDRFramebuffer.AttachColorTexture(m_HDRColorTexture, 0);
-    m_HDRFramebuffer.AttachColorTexture(m_HDRBrightTexture, 1);
-    m_HDRFramebuffer.CreateDepthRenderbuffer(m_ViewportWidth, m_ViewportHeight);
-    m_HDRFramebuffer.SetDrawBuffers(2);
-    if (!m_HDRFramebuffer.CheckComplete())
-    {
-        throw std::runtime_error("HDR framebuffer is incomplete.");
-    }
-
-    for (std::size_t i = 0; i < m_BlurTextures.size(); ++i)
-    {
-        m_BlurTextures[i].Allocate(m_ViewportWidth, m_ViewportHeight, GL_RGBA16F, GL_RGBA, GL_FLOAT);
-        m_BlurFramebuffers[i].Bind();
-        m_BlurFramebuffers[i].AttachColorTexture(m_BlurTextures[i], 0);
-        m_BlurFramebuffers[i].SetDrawBuffers(1);
-        if (!m_BlurFramebuffers[i].CheckComplete())
-        {
-            throw std::runtime_error("Blur framebuffer is incomplete.");
-        }
-    }
-
-    Framebuffer::Unbind();
-    m_ReferenceDirty = true;
-    m_HasReference = false;
-}
-
-void Renderer::EnsureRenderTargets(int width, int height)
-{
-    if (width == m_ViewportWidth && height == m_ViewportHeight)
-    {
-        return;
-    }
-
-    CreateRenderTargets(width, height);
-}
-
-void Renderer::RenderShadowPass(const Scene& scene)
-{
-    glViewport(0, 0, kShadowMapSize, kShadowMapSize);
-    m_ShadowFramebuffer.Bind();
-    glClear(GL_DEPTH_BUFFER_BIT);
-
-    glCullFace(GL_FRONT);
-    m_ShadowShader->Use();
-    m_ShadowShader->SetMat4("uLightSpaceMatrix", m_LightSpaceMatrix);
-
-    for (const RenderObject& object : scene.GetObjects())
-    {
-        if (!object.mesh)
-        {
-            continue;
-        }
-
-        m_ShadowShader->SetMat4("uModel", object.transform.GetMatrix());
-        object.mesh->Draw();
-    }
-
-    glCullFace(GL_BACK);
-    Framebuffer::Unbind();
-}
-
-void Renderer::RenderScenePass(const Scene& scene, const Camera& camera)
-{
     glViewport(0, 0, m_ViewportWidth, m_ViewportHeight);
-    m_HDRFramebuffer.Bind();
-    glClearColor(0.06f, 0.07f, 0.1f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    m_PBRShader->Use();
-    m_PBRShader->SetMat4("uView", camera.GetViewMatrix());
-    m_PBRShader->SetMat4("uProjection", camera.GetProjectionMatrix());
-    m_PBRShader->SetMat4("uLightSpaceMatrix", m_LightSpaceMatrix);
-    m_PBRShader->SetVec3("uCameraPosition", camera.GetPosition());
-    m_PBRShader->SetVec3("uDirectionalLight.direction", scene.GetDirectionalLight().direction);
-    m_PBRShader->SetVec3("uDirectionalLight.color", scene.GetDirectionalLight().color);
-    m_PBRShader->SetFloat("uDirectionalLight.intensity", scene.GetDirectionalLight().intensity);
-    m_PBRShader->SetVec3("uPointLight.position", scene.GetPointLight().position);
-    m_PBRShader->SetVec3("uPointLight.color", scene.GetPointLight().color);
-    m_PBRShader->SetFloat("uPointLight.intensity", scene.GetPointLight().intensity);
-    m_PBRShader->SetFloat("uPointLight.range", scene.GetPointLight().range);
-    m_PBRShader->SetInt("uShadowMap", 0);
-    m_ShadowTexture.Bind(0);
-
-    for (const RenderObject& object : scene.GetObjects())
-    {
-        if (!object.mesh)
-        {
-            continue;
-        }
-
-        m_PBRShader->SetMat4("uModel", object.transform.GetMatrix());
-        m_PBRShader->SetVec3("uMaterial.albedo", object.material.albedo);
-        m_PBRShader->SetFloat("uMaterial.metallic", object.material.metallic);
-        m_PBRShader->SetFloat("uMaterial.roughness", object.material.roughness);
-        m_PBRShader->SetFloat("uMaterial.ao", object.material.ao);
-        m_PBRShader->SetVec3("uMaterial.emissive", object.material.emissive);
-        object.mesh->Draw();
-    }
-
-    Framebuffer::Unbind();
-}
-
-void Renderer::RenderBloomPass()
-{
-    glDisable(GL_DEPTH_TEST);
-
-    bool horizontal = true;
-    bool firstIteration = true;
-
-    m_BlurShader->Use();
-
-    for (int i = 0; i < m_BloomPasses; ++i)
-    {
-        const int targetIndex = horizontal ? 0 : 1;
-        const int sourceIndex = horizontal ? 1 : 0;
-
-        m_BlurFramebuffers[targetIndex].Bind();
-        glClear(GL_COLOR_BUFFER_BIT);
-        m_BlurShader->SetInt("uHorizontal", horizontal ? 1 : 0);
-
-        if (firstIteration)
-        {
-            m_HDRBrightTexture.Bind(0);
-        }
-        else
-        {
-            m_BlurTextures[sourceIndex].Bind(0);
-        }
-
-        m_FullscreenQuad->Draw();
-        horizontal = !horizontal;
-        firstIteration = false;
-    }
-
-    m_LastBlurTextureIndex = horizontal ? 1 : 0;
-    Framebuffer::Unbind();
-}
-
-void Renderer::RenderCompositePass()
-{
-    Framebuffer::Unbind();
-    glViewport(0, 0, m_ViewportWidth, m_ViewportHeight);
-    glClear(GL_COLOR_BUFFER_BIT);
-
-    m_CompositeShader->Use();
-    m_CompositeShader->SetFloat("uExposure", m_Exposure);
-    m_CompositeShader->SetFloat("uSplitPosition", m_SplitPosition);
-    m_CompositeShader->SetInt("uHasReference", m_HasReference ? 1 : 0);
-
-    m_HDRColorTexture.Bind(0);
-    m_BlurTextures[m_LastBlurTextureIndex].Bind(1);
-    if (m_HasReference)
-    {
-        m_ReferenceTexture.Bind(2);
-    }
-    else
-    {
-        m_HDRColorTexture.Bind(2);
-    }
-    m_FullscreenQuad->Draw();
+    m_CompositePass.Execute(
+        m_ScenePass.GetSceneColorTexture(),
+        m_BloomPass.ResolveOutputTexture(m_ScenePass.GetBrightTexture()),
+        m_HasReference ? &m_ReferenceTexture : nullptr,
+        m_ScenePass.GetAlbedoTexture(),
+        m_ScenePass.GetNormalTexture(),
+        m_ScenePass.GetMaterialTexture(),
+        m_ScenePass.GetDepthTexture(),
+        m_ShadowPass.GetShadowTexture(),
+        m_Settings,
+        *m_FullscreenQuad
+    );
 
     glEnable(GL_DEPTH_TEST);
 }
 
-void Renderer::BakeReference(const Scene& scene, const Camera& camera)
+void Renderer::InvalidateReference()
+{
+    ++m_ReferenceRevision;
+    m_ReferenceDirty = true;
+    m_HasReference = false;
+}
+
+void Renderer::SetSettings(const RenderSettings& settings)
+{
+    m_Settings = settings;
+    m_Settings.exposure = std::clamp(m_Settings.exposure, 0.1f, 4.0f);
+    m_Settings.environmentIntensity = std::clamp(m_Settings.environmentIntensity, 0.0f, 8.0f);
+    m_Settings.splitPosition = std::clamp(m_Settings.splitPosition, 0.1f, 0.9f);
+    m_Settings.bloomPasses = std::clamp(m_Settings.bloomPasses, 0, 12);
+}
+
+void Renderer::EnsureRenderTargets(int width, int height)
+{
+    const int safeWidth = std::max(width, 1);
+    const int safeHeight = std::max(height, 1);
+
+    if (safeWidth == m_ViewportWidth && safeHeight == m_ViewportHeight)
+    {
+        return;
+    }
+
+    m_ViewportWidth = safeWidth;
+    m_ViewportHeight = safeHeight;
+    m_ScenePass.Resize(m_ViewportWidth, m_ViewportHeight);
+    m_BloomPass.Resize(m_ViewportWidth, m_ViewportHeight);
+    InvalidateReference();
+}
+
+void Renderer::UpdateReference(const Scene& scene, const Camera& camera)
 {
     using namespace std::chrono_literals;
 
@@ -282,18 +126,22 @@ void Renderer::BakeReference(const Scene& scene, const Camera& camera)
         m_RayTraceFuture.valid() &&
         m_RayTraceFuture.wait_for(0ms) == std::future_status::ready)
     {
-        const std::vector<glm::vec3> pixels = m_RayTraceFuture.get();
-        m_ReferenceTexture.Allocate(
-            m_ActiveRayTraceSettings.width,
-            m_ActiveRayTraceSettings.height,
-            GL_RGB16F,
-            GL_RGB,
-            GL_FLOAT,
-            pixels.data()
-        );
-
+        ReferenceFrame referenceFrame = m_RayTraceFuture.get();
         m_RayTraceInFlight = false;
-        m_HasReference = true;
+
+        if (referenceFrame.revision == m_ReferenceRevision)
+        {
+            m_ReferenceTexture.Allocate(
+                referenceFrame.settings.width,
+                referenceFrame.settings.height,
+                GL_RGB16F,
+                GL_RGB,
+                GL_FLOAT,
+                referenceFrame.pixels.data()
+            );
+            m_HasReference = true;
+            m_ReferenceDirty = false;
+        }
     }
 
     if (m_RayTraceInFlight || !m_ReferenceDirty)
@@ -302,22 +150,25 @@ void Renderer::BakeReference(const Scene& scene, const Camera& camera)
     }
 
     const float aspectRatio = static_cast<float>(m_ViewportWidth) / static_cast<float>(std::max(m_ViewportHeight, 1));
-    m_ActiveRayTraceSettings = m_RayTraceSettings;
-    m_ActiveRayTraceSettings.width = std::clamp(m_ViewportWidth / 3, 200, 320);
-    m_ActiveRayTraceSettings.height = std::max(
+    RayTraceSettings activeSettings = m_RayTraceSettings;
+    activeSettings.width = std::clamp(m_ViewportWidth / 3, 200, 320);
+    activeSettings.height = std::max(
         120,
-        static_cast<int>(static_cast<float>(m_ActiveRayTraceSettings.width) / aspectRatio)
+        static_cast<int>(static_cast<float>(activeSettings.width) / aspectRatio)
     );
 
     const Scene sceneCopy = scene;
     const Camera cameraCopy = camera;
-    const RayTraceSettings settings = m_ActiveRayTraceSettings;
+    const std::size_t revision = m_ReferenceRevision;
 
     m_ReferenceDirty = false;
     m_RayTraceInFlight = true;
-    m_RayTraceFuture = std::async(std::launch::async, [sceneCopy, cameraCopy, settings]() {
-        RayTracer rayTracer;
-        return rayTracer.Render(sceneCopy, cameraCopy, settings);
+    m_RayTraceFuture = std::async(std::launch::async, [this, sceneCopy, cameraCopy, activeSettings, revision]() {
+        return ReferenceFrame{
+            m_RayTracer.Render(sceneCopy, cameraCopy, activeSettings),
+            activeSettings,
+            revision
+        };
     });
 }
 

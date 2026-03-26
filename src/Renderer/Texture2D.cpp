@@ -30,6 +30,7 @@ void Texture2D::Allocate(
     m_Height = height;
 
     glBindTexture(GL_TEXTURE_2D, m_ID);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glTexImage2D(GL_TEXTURE_2D, 0, static_cast<GLint>(internalFormat), width, height, 0, format, type, data);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, static_cast<GLint>(minFilter));
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, static_cast<GLint>(magFilter));
@@ -41,7 +42,15 @@ void Texture2D::Allocate(
 void Texture2D::SetData(GLenum format, GLenum type, const void* data) const
 {
     glBindTexture(GL_TEXTURE_2D, m_ID);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_Width, m_Height, format, type, data);
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+void Texture2D::GenerateMipmaps() const
+{
+    glBindTexture(GL_TEXTURE_2D, m_ID);
+    glGenerateMipmap(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 

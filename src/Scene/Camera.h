@@ -15,6 +15,10 @@ public:
     );
 
     void SetAspectRatio(float aspectRatio);
+    void MoveForward(float distance);
+    void MoveRight(float distance);
+    void MoveUp(float distance);
+    void Rotate(float yawOffsetDegrees, float pitchOffsetDegrees);
 
     const glm::vec3& GetPosition() const { return m_Position; }
     const glm::vec3& GetTarget() const { return m_Target; }
@@ -35,4 +39,8 @@ private:
     float m_AspectRatio = 1.0f;
     float m_NearClip = 0.1f;
     float m_FarClip = 100.0f;
+    float m_YawDegrees = -90.0f;
+    float m_PitchDegrees = 0.0f;
+
+    void UpdateTarget();
 };
