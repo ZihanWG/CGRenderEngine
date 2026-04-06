@@ -710,13 +710,21 @@ namespace
         HitInfo hitInfo;
         if (!IntersectScene(acceleration, ray, hitInfo))
         {
-            return SampleProceduralEnvironment(scene.GetDirectionalLight(), ray.direction);
+            return SampleSceneEnvironment(
+                scene.GetEnvironment(),
+                scene.GetDirectionalLight(),
+                ray.direction
+            );
         }
 
         const auto& objects = scene.GetObjects();
         if (hitInfo.objectIndex >= objects.size())
         {
-            return SampleProceduralEnvironment(scene.GetDirectionalLight(), ray.direction);
+            return SampleSceneEnvironment(
+                scene.GetEnvironment(),
+                scene.GetDirectionalLight(),
+                ray.direction
+            );
         }
 
         const DirectionalLight& directionalLight = scene.GetDirectionalLight();
@@ -760,7 +768,7 @@ namespace
             }
         }
 
-        color += SampleProceduralEnvironment(directionalLight, normal) *
+        color += SampleSceneEnvironment(scene.GetEnvironment(), directionalLight, normal) *
                  material.albedo *
                  material.ao *
                  (1.0f - material.metallic) *

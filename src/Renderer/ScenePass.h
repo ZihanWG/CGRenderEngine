@@ -11,6 +11,7 @@
 class Camera;
 class Scene;
 class Texture2D;
+struct EnvironmentImage;
 
 struct RenderSettings;
 
@@ -44,6 +45,7 @@ private:
     int m_Height = 0;
     float m_EnvironmentMaxLod = 0.0f;
     bool m_EnvironmentReady = false;
+    const EnvironmentImage* m_LastEnvironmentImage = nullptr;
     std::unique_ptr<Shader> m_Shader;
     std::unique_ptr<Shader> m_SkyShader;
     std::shared_ptr<class Mesh> m_FullscreenQuad;

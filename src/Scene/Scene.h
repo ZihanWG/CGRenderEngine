@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "Scene/Environment.h"
 #include "Scene/Light.h"
 #include "Scene/Material.h"
 #include "Scene/Transform.h"
@@ -47,9 +48,17 @@ public:
     }
     const PointLight& GetPointLight() const { return m_PointLight; }
 
+    SceneEnvironment& GetEnvironment()
+    {
+        MarkDirty();
+        return m_Environment;
+    }
+    const SceneEnvironment& GetEnvironment() const { return m_Environment; }
+
 private:
     std::vector<RenderObject> m_Objects;
     DirectionalLight m_DirectionalLight;
     PointLight m_PointLight;
+    SceneEnvironment m_Environment;
     std::size_t m_ContentVersion = 1;
 };

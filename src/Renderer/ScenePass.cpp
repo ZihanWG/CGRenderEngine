@@ -224,6 +224,7 @@ void ScenePass::Execute(
     );
     m_SkyShader->SetVec3("uCameraPosition", camera.GetPosition());
     m_SkyShader->SetFloat("uEnvironmentIntensity", settings.environmentIntensity);
+    m_SkyShader->SetFloat("uEnvironmentRotationDegrees", scene.GetEnvironment().rotationDegrees);
     m_EnvironmentTexture.Bind(0);
     m_FullscreenQuad->Draw();
 
@@ -247,6 +248,7 @@ void ScenePass::Execute(
     m_Shader->SetInt("uEnableIBL", settings.enableIBL ? 1 : 0);
     m_Shader->SetFloat("uEnvironmentIntensity", settings.environmentIntensity);
     m_Shader->SetFloat("uEnvironmentMaxLod", m_EnvironmentMaxLod);
+    m_Shader->SetFloat("uEnvironmentRotationDegrees", scene.GetEnvironment().rotationDegrees);
     shadowTexture.Bind(0);
     m_EnvironmentTexture.Bind(6);
     m_BrdfLutTexture.Bind(7);
@@ -329,16 +331,48 @@ void ScenePass::Execute(
 
 void ScenePass::GenerateEnvironmentMap(const Scene& scene)
 {
+    const SceneEnvironment& environment = scene.GetEnvironment();
+    const EnvironmentImage* hdrImage = environment.hdrImage.get();
     const DirectionalLight& directionalLight = scene.GetDirectionalLight();
     const glm::vec3 normalizedDirection = glm::normalize(directionalLight.direction);
-    const bool lightUnchanged =
+    const bool usingHdr = hdrImage && hdrImage->IsValid();
+    const bool hdrUnchanged =
+        usingHdr &&
         m_EnvironmentReady &&
+        hdrImage == m_LastEnvironmentImage &&
+        hdrImage->width == m_EnvironmentTexture.GetWidth() &&
+        hdrImage->height == m_EnvironmentTexture.GetHeight();
+    const bool lightUnchanged =
+        !usingHdr &&
+        m_EnvironmentReady &&
+        m_LastEnvironmentImage == nullptr &&
         glm::length(normalizedDirection - m_LastEnvironmentLightDirection) < 1e-5f &&
         glm::length(directionalLight.color - m_LastEnvironmentLightColor) < 1e-5f &&
         glm::abs(directionalLight.intensity - m_LastEnvironmentLightIntensity) < 1e-5f;
 
-    if (lightUnchanged)
+    if (hdrUnchanged || lightUnchanged)
     {
+        return;
+    }
+
+    if (usingHdr)
+    {
+        m_EnvironmentTexture.Allocate(
+            hdrImage->width,
+            hdrImage->height,
+            GL_RGB16F,
+            GL_RGB,
+            GL_FLOAT,
+            hdrImage->pixels.data(),
+            GL_LINEAR_MIPMAP_LINEAR,
+            GL_LINEAR,
+            GL_REPEAT,
+            GL_CLAMP_TO_EDGE
+        );
+        m_EnvironmentTexture.GenerateMipmaps();
+        m_EnvironmentMaxLod = std::floor(std::log2(static_cast<float>(std::max(hdrImage->width, hdrImage->height))));
+        m_LastEnvironmentImage = hdrImage;
+        m_EnvironmentReady = true;
         return;
     }
 
@@ -377,6 +411,8 @@ void ScenePass::GenerateEnvironmentMap(const Scene& scene)
         GL_CLAMP_TO_EDGE
     );
     m_EnvironmentTexture.GenerateMipmaps();
+    m_EnvironmentMaxLod = std::floor(std::log2(static_cast<float>(std::max(kEnvironmentWidth, kEnvironmentHeight))));
+    m_LastEnvironmentImage = nullptr;
     m_LastEnvironmentLightDirection = normalizedDirection;
     m_LastEnvironmentLightColor = directionalLight.color;
     m_LastEnvironmentLightIntensity = directionalLight.intensity;
