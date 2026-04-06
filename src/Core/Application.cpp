@@ -1,5 +1,6 @@
 #include "Core/Application.h"
 
+#include <filesystem>
 #include <iostream>
 
 #include <GLFW/glfw3.h>
@@ -7,7 +8,37 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "Assets/GLTFLoader.h"
+#include "Renderer/EnvironmentLighting.h"
 #include "Renderer/Mesh.h"
+
+namespace
+{
+    std::string FindFirstHdrEnvironment()
+    {
+        const std::filesystem::path environmentRoot =
+            std::filesystem::path(CGENGINE_ASSET_ROOT) / "assets" / "environments";
+        if (!std::filesystem::exists(environmentRoot))
+        {
+            return {};
+        }
+
+        for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(environmentRoot))
+        {
+            if (!entry.is_regular_file())
+            {
+                continue;
+            }
+
+            const std::string extension = entry.path().extension().string();
+            if (extension == ".hdr" || extension == ".HDR")
+            {
+                return entry.path().string();
+            }
+        }
+
+        return {};
+    }
+}
 
 Application::Application(int width, int height, const char* title)
 {
@@ -73,6 +104,29 @@ Scene Application::BuildDemoScene() const
     scene.GetPointLight().color = glm::vec3(1.0f, 0.76f, 0.45f);
     scene.GetPointLight().intensity = 70.0f;
     scene.GetPointLight().range = 10.0f;
+
+    const std::string hdrPath = FindFirstHdrEnvironment();
+    if (!hdrPath.empty())
+    {
+        std::string errorMessage;
+        std::shared_ptr<EnvironmentImage> hdrImage = LoadHdrEnvironment(hdrPath, &errorMessage);
+        if (hdrImage && hdrImage->IsValid())
+        {
+            scene.GetEnvironment().hdrPath = hdrPath;
+            scene.GetEnvironment().hdrImage = std::move(hdrImage);
+            std::cout << "[Env] Loaded HDR environment: " << hdrPath << std::endl;
+        }
+        else
+        {
+            std::cout << "[Env] Failed to load HDR environment, using procedural sky: "
+                      << errorMessage
+                      << std::endl;
+        }
+    }
+    else
+    {
+        std::cout << "[Env] No HDR environment found in assets/environments, using procedural sky" << std::endl;
+    }
 
     auto ground = Mesh::CreatePlane(16.0f, 6.0f);
     auto sphere = Mesh::CreateSphere(1.0f, 24, 16);

@@ -63,6 +63,7 @@ uniform int uHasOcclusionTexture;
 uniform int uHasEmissiveTexture;
 uniform float uEnvironmentIntensity;
 uniform float uEnvironmentMaxLod;
+uniform float uEnvironmentRotationDegrees;
 
 const float PI = 3.14159265359;
 
@@ -97,7 +98,14 @@ vec3 FresnelSchlick(float cosTheta, vec3 f0)
 
 vec2 DirectionToLatLong(vec3 direction)
 {
-    vec3 dir = normalize(direction);
+    float rotationRadians = radians(uEnvironmentRotationDegrees);
+    float cosRotation = cos(rotationRadians);
+    float sinRotation = sin(rotationRadians);
+    vec3 dir = normalize(vec3(
+        direction.x * cosRotation - direction.z * sinRotation,
+        direction.y,
+        direction.x * sinRotation + direction.z * cosRotation
+    ));
     float phi = atan(dir.z, dir.x);
     float theta = acos(clamp(dir.y, -1.0, 1.0));
     return vec2(phi / (2.0 * PI) + 0.5, theta / PI);
