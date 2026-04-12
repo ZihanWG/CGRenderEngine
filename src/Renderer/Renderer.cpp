@@ -7,11 +7,12 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
-#include "Renderer/Mesh.h"
+#include "Assets/ResourceManager.h"
 #include "Scene/Camera.h"
 #include "Scene/Scene.h"
 
-Renderer::Renderer()
+Renderer::Renderer(ResourceManager& resourceManager)
+    : m_ResourceManager(resourceManager)
 {
     m_RayTraceSettings.samplesPerPixel = 2;
     m_RayTraceSettings.maxBounces = 1;
@@ -33,11 +34,11 @@ void Renderer::Initialize(int viewportWidth, int viewportHeight)
     m_ViewportWidth = std::max(viewportWidth, 1);
     m_ViewportHeight = std::max(viewportHeight, 1);
 
-    m_FullscreenQuad = Mesh::CreateFullscreenQuad();
-    m_ShadowPass.Initialize();
-    m_ScenePass.Initialize(m_ViewportWidth, m_ViewportHeight);
-    m_BloomPass.Initialize(m_ViewportWidth, m_ViewportHeight);
-    m_CompositePass.Initialize();
+    m_FullscreenQuad = m_ResourceManager.GetFullscreenQuad();
+    m_ShadowPass.Initialize(m_ResourceManager);
+    m_ScenePass.Initialize(m_ResourceManager, m_ShaderBufferManager, m_ViewportWidth, m_ViewportHeight);
+    m_BloomPass.Initialize(m_ResourceManager, m_ViewportWidth, m_ViewportHeight);
+    m_CompositePass.Initialize(m_ResourceManager);
     m_Initialized = true;
 }
 
@@ -51,38 +52,50 @@ void Renderer::RenderFrame(const Scene& scene, const Camera& camera, int viewpor
     if (scene.GetContentVersion() != m_LastSceneVersion)
     {
         m_LastSceneVersion = scene.GetContentVersion();
+        m_SubmissionCache.Invalidate();
         InvalidateReference();
     }
 
     EnsureRenderTargets(viewportWidth, viewportHeight);
-    m_LightSpaceMatrix = CalculateLightSpaceMatrix(scene);
+    const RenderSubmission& submission = m_SubmissionCache.Build(scene);
+    m_LightSpaceMatrix = CalculateLightSpaceMatrix(submission);
 
-    m_ShadowPass.Execute(scene, m_LightSpaceMatrix, m_Settings.enableShadows);
-    m_ScenePass.Execute(
-        scene,
-        camera,
-        m_LightSpaceMatrix,
-        m_ShadowPass.GetShadowTexture(),
-        m_Settings
-    );
-    m_BloomPass.Execute(m_ScenePass.GetBrightTexture(), *m_FullscreenQuad, m_Settings);
-    UpdateReference(scene, camera);
-
-    glViewport(0, 0, m_ViewportWidth, m_ViewportHeight);
-    m_CompositePass.Execute(
-        m_ScenePass.GetSceneColorTexture(),
-        m_BloomPass.ResolveOutputTexture(m_ScenePass.GetBrightTexture()),
-        m_HasReference ? &m_ReferenceTexture : nullptr,
-        m_ScenePass.GetAlbedoTexture(),
-        m_ScenePass.GetNormalTexture(),
-        m_ScenePass.GetMaterialTexture(),
-        m_ScenePass.GetDepthTexture(),
-        m_ShadowPass.GetShadowTexture(),
-        m_Settings,
-        *m_FullscreenQuad
-    );
-
-    glEnable(GL_DEPTH_TEST);
+    m_RenderGraph.Clear();
+    m_RenderGraph.AddPass("shadow", {}, [&]() {
+        m_ShadowPass.Execute(submission, m_LightSpaceMatrix, m_Settings.enableShadows);
+    });
+    m_RenderGraph.AddPass("scene", {"shadow"}, [&]() {
+        m_ScenePass.Execute(
+            submission,
+            camera,
+            m_LightSpaceMatrix,
+            m_ShadowPass.GetShadowTexture(),
+            m_Settings
+        );
+    });
+    m_RenderGraph.AddPass("bloom", {"scene"}, [&]() {
+        m_BloomPass.Execute(m_ScenePass.GetBrightTexture(), *m_FullscreenQuad, m_Settings);
+    });
+    m_RenderGraph.AddPass("reference", {}, [&]() {
+        UpdateReference(scene, camera);
+    });
+    m_RenderGraph.AddPass("composite", {"scene", "bloom", "reference"}, [&]() {
+        glViewport(0, 0, m_ViewportWidth, m_ViewportHeight);
+        m_CompositePass.Execute(
+            m_ScenePass.GetSceneColorTexture(),
+            m_BloomPass.ResolveOutputTexture(m_ScenePass.GetBrightTexture()),
+            m_HasReference ? &m_ReferenceTexture : nullptr,
+            m_ScenePass.GetAlbedoTexture(),
+            m_ScenePass.GetNormalTexture(),
+            m_ScenePass.GetMaterialTexture(),
+            m_ScenePass.GetDepthTexture(),
+            m_ShadowPass.GetShadowTexture(),
+            m_Settings,
+            *m_FullscreenQuad
+        );
+        glEnable(GL_DEPTH_TEST);
+    });
+    m_RenderGraph.Execute();
 }
 
 void Renderer::InvalidateReference()
@@ -172,10 +185,10 @@ void Renderer::UpdateReference(const Scene& scene, const Camera& camera)
     });
 }
 
-glm::mat4 Renderer::CalculateLightSpaceMatrix(const Scene& scene) const
+glm::mat4 Renderer::CalculateLightSpaceMatrix(const RenderSubmission& submission) const
 {
     const glm::vec3 target(0.0f, 1.0f, 0.0f);
-    const glm::vec3 lightDirection = glm::normalize(scene.GetDirectionalLight().direction);
+    const glm::vec3 lightDirection = glm::normalize(submission.sceneState.directionalLight.direction);
     const glm::vec3 lightPosition = target - lightDirection * 12.0f;
     const glm::mat4 lightView = glm::lookAt(lightPosition, target, glm::vec3(0.0f, 1.0f, 0.0f));
     const glm::mat4 lightProjection = glm::ortho(-12.0f, 12.0f, -12.0f, 12.0f, 1.0f, 30.0f);

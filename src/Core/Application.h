@@ -3,6 +3,7 @@
 #include <array>
 #include <memory>
 
+#include "Assets/ResourceManager.h"
 #include "Core/Window.h"
 #include "Renderer/Renderer.h"
 #include "Scene/Camera.h"
@@ -17,11 +18,12 @@ public:
     void Run();
 
 private:
-    Scene BuildDemoScene() const;
+    Scene BuildDemoScene();
     void HandleInput(float deltaTime);
     void PrintControls() const;
     bool ConsumeToggleKey(int key, bool& latch) const;
 
+    ResourceManager m_ResourceManager;
     std::unique_ptr<Window> m_Window;
     std::unique_ptr<Renderer> m_Renderer;
     std::unique_ptr<Camera> m_Camera;

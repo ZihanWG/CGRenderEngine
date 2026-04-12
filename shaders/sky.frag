@@ -8,17 +8,23 @@ layout (location = 4) out vec4 MaterialColor;
 
 in vec2 vTexCoord;
 
-uniform mat4 uInverseViewProjection;
-uniform vec3 uCameraPosition;
+layout (std140) uniform FrameData
+{
+    mat4 uView;
+    mat4 uProjection;
+    mat4 uLightSpaceMatrix;
+    mat4 uInverseViewProjection;
+    vec4 uCameraPosition;
+    vec4 uEnvironmentData;
+};
+
 uniform sampler2D uEnvironmentMap;
-uniform float uEnvironmentIntensity;
-uniform float uEnvironmentRotationDegrees;
 
 const float PI = 3.14159265359;
 
 vec2 DirectionToLatLong(vec3 direction)
 {
-    float rotationRadians = radians(uEnvironmentRotationDegrees);
+    float rotationRadians = radians(uEnvironmentData.z);
     float cosRotation = cos(rotationRadians);
     float sinRotation = sin(rotationRadians);
     vec3 dir = normalize(vec3(
@@ -36,9 +42,9 @@ void main()
     vec2 ndc = vTexCoord * 2.0 - 1.0;
     vec4 clipPosition = vec4(ndc, 1.0, 1.0);
     vec4 worldPosition = uInverseViewProjection * clipPosition;
-    vec3 worldDirection = normalize(worldPosition.xyz / worldPosition.w - uCameraPosition);
+    vec3 worldDirection = normalize(worldPosition.xyz / worldPosition.w - uCameraPosition.xyz);
 
-    vec3 color = texture(uEnvironmentMap, DirectionToLatLong(worldDirection)).rgb * uEnvironmentIntensity;
+    vec3 color = texture(uEnvironmentMap, DirectionToLatLong(worldDirection)).rgb * uEnvironmentData.x;
     float brightness = dot(color, vec3(0.2126, 0.7152, 0.0722));
 
     FragColor = vec4(color, 1.0);

@@ -10,15 +10,20 @@
 #include "Renderer/BloomPass.h"
 #include "Renderer/CompositePass.h"
 #include "Renderer/RayTracer.h"
+#include "Renderer/RenderGraph.h"
 #include "Renderer/RenderSettings.h"
+#include "Renderer/RenderSubmission.h"
 #include "Renderer/ScenePass.h"
+#include "Renderer/ShaderBufferManager.h"
 #include "Renderer/ShadowPass.h"
 #include "Renderer/Texture2D.h"
+
+class ResourceManager;
 
 class Renderer
 {
 public:
-    Renderer();
+    explicit Renderer(ResourceManager& resourceManager);
     ~Renderer();
 
     void Initialize(int viewportWidth, int viewportHeight);
@@ -38,7 +43,7 @@ private:
 
     void EnsureRenderTargets(int width, int height);
     void UpdateReference(const class Scene& scene, const class Camera& camera);
-    glm::mat4 CalculateLightSpaceMatrix(const class Scene& scene) const;
+    glm::mat4 CalculateLightSpaceMatrix(const RenderSubmission& submission) const;
 
     int m_ViewportWidth = 0;
     int m_ViewportHeight = 0;
@@ -49,10 +54,14 @@ private:
     std::size_t m_ReferenceRevision = 1;
     std::size_t m_LastSceneVersion = 0;
     glm::mat4 m_LightSpaceMatrix{1.0f};
+    ResourceManager& m_ResourceManager;
 
     std::shared_ptr<class Mesh> m_FullscreenQuad;
 
     RenderSettings m_Settings;
+    RenderGraph m_RenderGraph;
+    RenderSubmissionCache m_SubmissionCache;
+    ShaderBufferManager m_ShaderBufferManager;
     ShadowPass m_ShadowPass;
     ScenePass m_ScenePass;
     BloomPass m_BloomPass;

@@ -1,0 +1,22 @@
+#pragma once
+
+#include "Renderer/RenderBufferTypes.h"
+#include "Renderer/ShaderBufferManager.h"
+#include "Renderer/Texture2D.h"
+
+struct Material;
+
+class MaterialBinder
+{
+public:
+    void Initialize(ShaderBufferManager& bufferManager);
+    void Bind(const Material& material) const;
+
+private:
+    ShaderBufferManager* m_BufferManager = nullptr;
+    Texture2D m_DefaultBaseColorTexture;
+    Texture2D m_DefaultMetallicRoughnessTexture;
+    Texture2D m_DefaultNormalTexture;
+    Texture2D m_DefaultOcclusionTexture;
+    Texture2D m_DefaultEmissiveTexture;
+};

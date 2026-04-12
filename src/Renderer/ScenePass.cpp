@@ -9,12 +9,13 @@
 
 #include <glm/gtc/constants.hpp>
 
+#include "Assets/ResourceManager.h"
 #include "Renderer/EnvironmentLighting.h"
 #include "Renderer/Mesh.h"
+#include "Renderer/RenderBufferTypes.h"
 #include "Renderer/RenderSettings.h"
-#include "Renderer/Shader.h"
+#include "Renderer/RenderSubmission.h"
 #include "Scene/Camera.h"
-#include "Scene/Scene.h"
 
 namespace
 {
@@ -117,7 +118,12 @@ namespace
     }
 }
 
-void ScenePass::Initialize(int width, int height)
+void ScenePass::Initialize(
+    ResourceManager& resourceManager,
+    ShaderBufferManager& bufferManager,
+    int width,
+    int height
+)
 {
     if (m_Initialized)
     {
@@ -125,7 +131,8 @@ void ScenePass::Initialize(int width, int height)
         return;
     }
 
-    m_Shader = std::make_unique<Shader>("shaders/pbr.vert", "shaders/pbr.frag");
+    m_BufferManager = &bufferManager;
+    m_Shader = resourceManager.LoadShader("shaders/pbr.vert", "shaders/pbr.frag");
     m_Shader->Use();
     m_Shader->SetInt("uShadowMap", 0);
     m_Shader->SetInt("uBaseColorTexture", 1);
@@ -135,55 +142,18 @@ void ScenePass::Initialize(int width, int height)
     m_Shader->SetInt("uEmissiveTexture", 5);
     m_Shader->SetInt("uEnvironmentMap", 6);
     m_Shader->SetInt("uBrdfLut", 7);
+    m_Shader->SetUniformBlockBinding("FrameData", bufferManager.GetBindingPoint(BufferBindingSlot::Frame));
+    m_Shader->SetUniformBlockBinding("LightingData", bufferManager.GetBindingPoint(BufferBindingSlot::Lighting));
+    m_Shader->SetUniformBlockBinding("MaterialData", bufferManager.GetBindingPoint(BufferBindingSlot::Material));
 
-    m_SkyShader = std::make_unique<Shader>("shaders/sky.vert", "shaders/sky.frag");
+    m_SkyShader = resourceManager.LoadShader("shaders/sky.vert", "shaders/sky.frag");
     m_SkyShader->Use();
     m_SkyShader->SetInt("uEnvironmentMap", 0);
-    m_FullscreenQuad = Mesh::CreateFullscreenQuad();
-
-    const unsigned char whitePixel[] = {255, 255, 255, 255};
-    const unsigned char normalPixel[] = {128, 128, 255, 255};
-    const unsigned char blackPixel[] = {0, 0, 0, 255};
-    m_DefaultBaseColorTexture.Allocate(
-        1,
-        1,
-        GL_SRGB8_ALPHA8,
-        GL_RGBA,
-        GL_UNSIGNED_BYTE,
-        whitePixel
-    );
-    m_DefaultMetallicRoughnessTexture.Allocate(
-        1,
-        1,
-        GL_RGBA8,
-        GL_RGBA,
-        GL_UNSIGNED_BYTE,
-        whitePixel
-    );
-    m_DefaultNormalTexture.Allocate(
-        1,
-        1,
-        GL_RGBA8,
-        GL_RGBA,
-        GL_UNSIGNED_BYTE,
-        normalPixel
-    );
-    m_DefaultOcclusionTexture.Allocate(
-        1,
-        1,
-        GL_RGBA8,
-        GL_RGBA,
-        GL_UNSIGNED_BYTE,
-        whitePixel
-    );
-    m_DefaultEmissiveTexture.Allocate(
-        1,
-        1,
-        GL_SRGB8_ALPHA8,
-        GL_RGBA,
-        GL_UNSIGNED_BYTE,
-        blackPixel
-    );
+    m_SkyShader->SetUniformBlockBinding("FrameData", bufferManager.GetBindingPoint(BufferBindingSlot::Frame));
+    m_FullscreenQuad = resourceManager.GetFullscreenQuad();
+    bufferManager.InitializeUniformBuffer(BufferBindingSlot::Frame, sizeof(FrameUniformData));
+    bufferManager.InitializeUniformBuffer(BufferBindingSlot::Lighting, sizeof(LightingUniformData));
+    m_MaterialBinder.Initialize(bufferManager);
     GenerateBrdfLut();
     m_EnvironmentMaxLod = std::floor(std::log2(static_cast<float>(std::max(kEnvironmentWidth, kEnvironmentHeight))));
 
@@ -199,14 +169,45 @@ void ScenePass::Resize(int width, int height)
 }
 
 void ScenePass::Execute(
-    const Scene& scene,
+    const RenderSubmission& submission,
     const Camera& camera,
     const glm::mat4& lightSpaceMatrix,
     const Texture2D& shadowTexture,
     const RenderSettings& settings
 )
 {
-    GenerateEnvironmentMap(scene);
+    GenerateEnvironmentMap(submission);
+
+    const SceneEnvironment* environment = submission.sceneState.environment;
+    const float environmentRotation = environment ? environment->rotationDegrees : 0.0f;
+    const FrameUniformData frameData{
+        camera.GetViewMatrix(),
+        camera.GetProjectionMatrix(),
+        lightSpaceMatrix,
+        glm::inverse(camera.GetProjectionMatrix() * camera.GetViewMatrix()),
+        glm::vec4(camera.GetPosition(), 1.0f),
+        glm::vec4(settings.environmentIntensity, m_EnvironmentMaxLod, environmentRotation, 0.0f)
+    };
+    const LightingUniformData lightingData{
+        glm::vec4(submission.sceneState.directionalLight.direction, 0.0f),
+        glm::vec4(
+            submission.sceneState.directionalLight.color,
+            submission.sceneState.directionalLight.intensity
+        ),
+        glm::vec4(
+            submission.sceneState.pointLight.position,
+            submission.sceneState.pointLight.range
+        ),
+        glm::vec4(
+            submission.sceneState.pointLight.color,
+            submission.sceneState.pointLight.intensity
+        )
+    };
+
+    m_BufferManager->UploadUniform(BufferBindingSlot::Frame, frameData);
+    m_BufferManager->UploadUniform(BufferBindingSlot::Lighting, lightingData);
+    m_BufferManager->Bind(BufferBindingSlot::Frame);
+    m_BufferManager->Bind(BufferBindingSlot::Lighting);
 
     glViewport(0, 0, m_Width, m_Height);
     m_Framebuffer.Bind();
@@ -218,13 +219,6 @@ void ScenePass::Execute(
     glDisable(GL_CULL_FACE);
 
     m_SkyShader->Use();
-    m_SkyShader->SetMat4(
-        "uInverseViewProjection",
-        glm::inverse(camera.GetProjectionMatrix() * camera.GetViewMatrix())
-    );
-    m_SkyShader->SetVec3("uCameraPosition", camera.GetPosition());
-    m_SkyShader->SetFloat("uEnvironmentIntensity", settings.environmentIntensity);
-    m_SkyShader->SetFloat("uEnvironmentRotationDegrees", scene.GetEnvironment().rotationDegrees);
     m_EnvironmentTexture.Bind(0);
     m_FullscreenQuad->Draw();
 
@@ -233,107 +227,34 @@ void ScenePass::Execute(
     glDepthMask(GL_TRUE);
 
     m_Shader->Use();
-    m_Shader->SetMat4("uView", camera.GetViewMatrix());
-    m_Shader->SetMat4("uProjection", camera.GetProjectionMatrix());
-    m_Shader->SetMat4("uLightSpaceMatrix", lightSpaceMatrix);
-    m_Shader->SetVec3("uCameraPosition", camera.GetPosition());
-    m_Shader->SetVec3("uDirectionalLight.direction", scene.GetDirectionalLight().direction);
-    m_Shader->SetVec3("uDirectionalLight.color", scene.GetDirectionalLight().color);
-    m_Shader->SetFloat("uDirectionalLight.intensity", scene.GetDirectionalLight().intensity);
-    m_Shader->SetVec3("uPointLight.position", scene.GetPointLight().position);
-    m_Shader->SetVec3("uPointLight.color", scene.GetPointLight().color);
-    m_Shader->SetFloat("uPointLight.intensity", scene.GetPointLight().intensity);
-    m_Shader->SetFloat("uPointLight.range", scene.GetPointLight().range);
     m_Shader->SetInt("uEnableShadows", settings.enableShadows ? 1 : 0);
     m_Shader->SetInt("uEnableIBL", settings.enableIBL ? 1 : 0);
-    m_Shader->SetFloat("uEnvironmentIntensity", settings.environmentIntensity);
-    m_Shader->SetFloat("uEnvironmentMaxLod", m_EnvironmentMaxLod);
-    m_Shader->SetFloat("uEnvironmentRotationDegrees", scene.GetEnvironment().rotationDegrees);
     shadowTexture.Bind(0);
     m_EnvironmentTexture.Bind(6);
     m_BrdfLutTexture.Bind(7);
 
-    for (const RenderObject& object : scene.GetObjects())
+    for (const RenderItem& item : submission.drawItems)
     {
-        if (!object.mesh)
+        if (!item.mesh || !item.material)
         {
             continue;
         }
 
-        m_Shader->SetMat4("uModel", object.transform.GetMatrix());
-        m_Shader->SetVec3("uMaterial.albedo", object.material.albedo);
-        m_Shader->SetFloat("uMaterial.metallic", object.material.metallic);
-        m_Shader->SetFloat("uMaterial.roughness", object.material.roughness);
-        m_Shader->SetFloat("uMaterial.ao", object.material.ao);
-        m_Shader->SetVec3("uMaterial.emissive", object.material.emissive);
-        m_Shader->SetFloat("uMaterial.normalScale", object.material.normalScale);
-        m_Shader->SetFloat("uMaterial.occlusionStrength", object.material.occlusionStrength);
-
-        m_Shader->SetInt("uHasBaseColorTexture", object.material.baseColorTexture ? 1 : 0);
-        m_Shader->SetInt(
-            "uHasMetallicRoughnessTexture",
-            object.material.metallicRoughnessTexture ? 1 : 0
-        );
-        m_Shader->SetInt("uHasNormalTexture", object.material.normalTexture ? 1 : 0);
-        m_Shader->SetInt("uHasOcclusionTexture", object.material.occlusionTexture ? 1 : 0);
-        m_Shader->SetInt("uHasEmissiveTexture", object.material.emissiveTexture ? 1 : 0);
-
-        if (object.material.baseColorTexture)
-        {
-            object.material.baseColorTexture->Bind(1);
-        }
-        else
-        {
-            m_DefaultBaseColorTexture.Bind(1);
-        }
-
-        if (object.material.metallicRoughnessTexture)
-        {
-            object.material.metallicRoughnessTexture->Bind(2);
-        }
-        else
-        {
-            m_DefaultMetallicRoughnessTexture.Bind(2);
-        }
-
-        if (object.material.normalTexture)
-        {
-            object.material.normalTexture->Bind(3);
-        }
-        else
-        {
-            m_DefaultNormalTexture.Bind(3);
-        }
-
-        if (object.material.occlusionTexture)
-        {
-            object.material.occlusionTexture->Bind(4);
-        }
-        else
-        {
-            m_DefaultOcclusionTexture.Bind(4);
-        }
-
-        if (object.material.emissiveTexture)
-        {
-            object.material.emissiveTexture->Bind(5);
-        }
-        else
-        {
-            m_DefaultEmissiveTexture.Bind(5);
-        }
-
-        object.mesh->Draw();
+        m_Shader->SetMat4("uModel", item.modelMatrix);
+        m_MaterialBinder.Bind(*item.material);
+        item.mesh->Draw();
     }
 
     Framebuffer::Unbind();
 }
 
-void ScenePass::GenerateEnvironmentMap(const Scene& scene)
+void ScenePass::GenerateEnvironmentMap(const RenderSubmission& submission)
 {
-    const SceneEnvironment& environment = scene.GetEnvironment();
-    const EnvironmentImage* hdrImage = environment.hdrImage.get();
-    const DirectionalLight& directionalLight = scene.GetDirectionalLight();
+    const SceneEnvironment* environment = submission.sceneState.environment;
+    const SceneEnvironment emptyEnvironment;
+    const SceneEnvironment& environmentState = environment ? *environment : emptyEnvironment;
+    const EnvironmentImage* hdrImage = environmentState.hdrImage.get();
+    const DirectionalLight& directionalLight = submission.sceneState.directionalLight;
     const glm::vec3 normalizedDirection = glm::normalize(directionalLight.direction);
     const bool usingHdr = hdrImage && hdrImage->IsValid();
     const bool hdrUnchanged =

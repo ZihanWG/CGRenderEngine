@@ -15,10 +15,17 @@ out VS_OUT
     vec4 FragPosLightSpace;
 } vs_out;
 
+layout (std140) uniform FrameData
+{
+    mat4 uView;
+    mat4 uProjection;
+    mat4 uLightSpaceMatrix;
+    mat4 uInverseViewProjection;
+    vec4 uCameraPosition;
+    vec4 uEnvironmentData;
+};
+
 uniform mat4 uModel;
-uniform mat4 uView;
-uniform mat4 uProjection;
-uniform mat4 uLightSpaceMatrix;
 
 void main()
 {

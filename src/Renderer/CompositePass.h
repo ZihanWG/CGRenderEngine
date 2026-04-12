@@ -5,6 +5,7 @@
 #include "Renderer/Shader.h"
 
 class Mesh;
+class ResourceManager;
 class Texture2D;
 
 struct RenderSettings;
@@ -12,7 +13,7 @@ struct RenderSettings;
 class CompositePass
 {
 public:
-    void Initialize();
+    void Initialize(ResourceManager& resourceManager);
     void Execute(
         const Texture2D& sceneColor,
         const Texture2D& bloomColor,
@@ -28,5 +29,5 @@ public:
 
 private:
     bool m_Initialized = false;
-    std::unique_ptr<Shader> m_Shader;
+    std::shared_ptr<Shader> m_Shader;
 };

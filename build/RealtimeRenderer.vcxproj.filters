@@ -4,6 +4,9 @@
     <ClCompile Include="E:\CGEngine\src\Assets\GLTFLoader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="E:\CGEngine\src\Assets\ResourceManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="E:\CGEngine\src\Core\Application.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -25,10 +28,19 @@
     <ClCompile Include="E:\CGEngine\src\Renderer\IndexBuffer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="E:\CGEngine\src\Renderer\MaterialBinder.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="E:\CGEngine\src\Renderer\Mesh.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="E:\CGEngine\src\Renderer\RayTracer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\CGEngine\src\Renderer\RenderGraph.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\CGEngine\src\Renderer\RenderSubmission.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="E:\CGEngine\src\Renderer\Renderer.cpp">
@@ -38,6 +50,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="E:\CGEngine\src\Renderer\Shader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\CGEngine\src\Renderer\ShaderBuffer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="E:\CGEngine\src\Renderer\ShaderBufferManager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="E:\CGEngine\src\Renderer\ShadowPass.cpp">

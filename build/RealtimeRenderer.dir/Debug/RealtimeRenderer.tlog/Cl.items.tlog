@@ -1,4 +1,5 @@
 E:\CGEngine\src\Assets\GLTFLoader.cpp;E:\CGEngine\build\RealtimeRenderer.dir\Debug\GLTFLoader.obj
+E:\CGEngine\src\Assets\ResourceManager.cpp;E:\CGEngine\build\RealtimeRenderer.dir\Debug\ResourceManager.obj
 E:\CGEngine\src\Core\Application.cpp;E:\CGEngine\build\RealtimeRenderer.dir\Debug\Application.obj
 E:\CGEngine\src\Core\Window.cpp;E:\CGEngine\build\RealtimeRenderer.dir\Debug\Window.obj
 E:\CGEngine\src\Renderer\BloomPass.cpp;E:\CGEngine\build\RealtimeRenderer.dir\Debug\BloomPass.obj
@@ -6,11 +7,16 @@ E:\CGEngine\src\Renderer\CompositePass.cpp;E:\CGEngine\build\RealtimeRenderer.di
 E:\CGEngine\src\Renderer\EnvironmentLighting.cpp;E:\CGEngine\build\RealtimeRenderer.dir\Debug\EnvironmentLighting.obj
 E:\CGEngine\src\Renderer\Framebuffer.cpp;E:\CGEngine\build\RealtimeRenderer.dir\Debug\Framebuffer.obj
 E:\CGEngine\src\Renderer\IndexBuffer.cpp;E:\CGEngine\build\RealtimeRenderer.dir\Debug\IndexBuffer.obj
+E:\CGEngine\src\Renderer\MaterialBinder.cpp;E:\CGEngine\build\RealtimeRenderer.dir\Debug\MaterialBinder.obj
 E:\CGEngine\src\Renderer\Mesh.cpp;E:\CGEngine\build\RealtimeRenderer.dir\Debug\Mesh.obj
 E:\CGEngine\src\Renderer\RayTracer.cpp;E:\CGEngine\build\RealtimeRenderer.dir\Debug\RayTracer.obj
+E:\CGEngine\src\Renderer\RenderGraph.cpp;E:\CGEngine\build\RealtimeRenderer.dir\Debug\RenderGraph.obj
+E:\CGEngine\src\Renderer\RenderSubmission.cpp;E:\CGEngine\build\RealtimeRenderer.dir\Debug\RenderSubmission.obj
 E:\CGEngine\src\Renderer\Renderer.cpp;E:\CGEngine\build\RealtimeRenderer.dir\Debug\Renderer.obj
 E:\CGEngine\src\Renderer\ScenePass.cpp;E:\CGEngine\build\RealtimeRenderer.dir\Debug\ScenePass.obj
 E:\CGEngine\src\Renderer\Shader.cpp;E:\CGEngine\build\RealtimeRenderer.dir\Debug\Shader.obj
+E:\CGEngine\src\Renderer\ShaderBuffer.cpp;E:\CGEngine\build\RealtimeRenderer.dir\Debug\ShaderBuffer.obj
+E:\CGEngine\src\Renderer\ShaderBufferManager.cpp;E:\CGEngine\build\RealtimeRenderer.dir\Debug\ShaderBufferManager.obj
 E:\CGEngine\src\Renderer\ShadowPass.cpp;E:\CGEngine\build\RealtimeRenderer.dir\Debug\ShadowPass.obj
 E:\CGEngine\src\Renderer\Texture2D.cpp;E:\CGEngine\build\RealtimeRenderer.dir\Debug\Texture2D.obj
 E:\CGEngine\src\Renderer\VertexArray.cpp;E:\CGEngine\build\RealtimeRenderer.dir\Debug\VertexArray.obj
