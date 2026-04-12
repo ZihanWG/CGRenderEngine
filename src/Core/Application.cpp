@@ -1,5 +1,6 @@
 #include "Core/Application.h"
 
+#include <exception>
 #include <filesystem>
 #include <iostream>
 
@@ -8,8 +9,6 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "Assets/GLTFLoader.h"
-#include "Renderer/EnvironmentLighting.h"
-#include "Renderer/Mesh.h"
 
 namespace
 {
@@ -54,7 +53,7 @@ Application::Application(int width, int height, const char* title)
 
     m_Scene = BuildDemoScene();
 
-    m_Renderer = std::make_unique<Renderer>();
+    m_Renderer = std::make_unique<Renderer>(m_ResourceManager);
     m_Renderer->Initialize(m_Window->GetWidth(), m_Window->GetHeight());
     PrintControls();
 }
@@ -92,7 +91,7 @@ void Application::Run()
     }
 }
 
-Scene Application::BuildDemoScene() const
+Scene Application::BuildDemoScene()
 {
     Scene scene;
 
@@ -108,18 +107,17 @@ Scene Application::BuildDemoScene() const
     const std::string hdrPath = FindFirstHdrEnvironment();
     if (!hdrPath.empty())
     {
-        std::string errorMessage;
-        std::shared_ptr<EnvironmentImage> hdrImage = LoadHdrEnvironment(hdrPath, &errorMessage);
-        if (hdrImage && hdrImage->IsValid())
+        try
         {
+            std::shared_ptr<EnvironmentImage> hdrImage = m_ResourceManager.LoadEnvironment(hdrPath);
             scene.GetEnvironment().hdrPath = hdrPath;
             scene.GetEnvironment().hdrImage = std::move(hdrImage);
             std::cout << "[Env] Loaded HDR environment: " << hdrPath << std::endl;
         }
-        else
+        catch (const std::exception& exception)
         {
             std::cout << "[Env] Failed to load HDR environment, using procedural sky: "
-                      << errorMessage
+                      << exception.what()
                       << std::endl;
         }
     }
@@ -128,9 +126,9 @@ Scene Application::BuildDemoScene() const
         std::cout << "[Env] No HDR environment found in assets/environments, using procedural sky" << std::endl;
     }
 
-    auto ground = Mesh::CreatePlane(16.0f, 6.0f);
-    auto sphere = Mesh::CreateSphere(1.0f, 24, 16);
-    auto cube = Mesh::CreateCube(1.0f);
+    auto ground = m_ResourceManager.GetPlane(16.0f, 6.0f);
+    auto sphere = m_ResourceManager.GetSphere(1.0f, 24, 16);
+    auto cube = m_ResourceManager.GetCube(1.0f);
 
     {
         RenderObject object;

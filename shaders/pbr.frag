@@ -16,36 +16,34 @@ in VS_OUT
     vec4 FragPosLightSpace;
 } fs_in;
 
-struct MaterialInfo
+layout (std140) uniform FrameData
 {
-    vec3 albedo;
-    float metallic;
-    float roughness;
-    float ao;
-    vec3 emissive;
-    float normalScale;
-    float occlusionStrength;
+    mat4 uView;
+    mat4 uProjection;
+    mat4 uLightSpaceMatrix;
+    mat4 uInverseViewProjection;
+    vec4 uCameraPosition;
+    vec4 uEnvironmentData;
 };
 
-struct DirectionalLight
+layout (std140) uniform LightingData
 {
-    vec3 direction;
-    vec3 color;
-    float intensity;
+    vec4 uDirectionalDirection;
+    vec4 uDirectionalColorIntensity;
+    vec4 uPointPositionRange;
+    vec4 uPointColorIntensity;
 };
 
-struct PointLight
+layout (std140) uniform MaterialData
 {
-    vec3 position;
-    vec3 color;
-    float intensity;
-    float range;
+    vec4 uMaterialAlbedo;
+    vec4 uMaterialEmissive;
+    vec4 uMaterialParams0;
+    vec4 uMaterialParams1;
+    vec4 uMaterialTextureFlags0;
+    vec4 uMaterialTextureFlags1;
 };
 
-uniform MaterialInfo uMaterial;
-uniform DirectionalLight uDirectionalLight;
-uniform PointLight uPointLight;
-uniform vec3 uCameraPosition;
 uniform sampler2D uShadowMap;
 uniform sampler2D uBaseColorTexture;
 uniform sampler2D uMetallicRoughnessTexture;
@@ -56,14 +54,6 @@ uniform sampler2D uEnvironmentMap;
 uniform sampler2D uBrdfLut;
 uniform int uEnableShadows;
 uniform int uEnableIBL;
-uniform int uHasBaseColorTexture;
-uniform int uHasMetallicRoughnessTexture;
-uniform int uHasNormalTexture;
-uniform int uHasOcclusionTexture;
-uniform int uHasEmissiveTexture;
-uniform float uEnvironmentIntensity;
-uniform float uEnvironmentMaxLod;
-uniform float uEnvironmentRotationDegrees;
 
 const float PI = 3.14159265359;
 
@@ -98,7 +88,7 @@ vec3 FresnelSchlick(float cosTheta, vec3 f0)
 
 vec2 DirectionToLatLong(vec3 direction)
 {
-    float rotationRadians = radians(uEnvironmentRotationDegrees);
+    float rotationRadians = radians(uEnvironmentData.z);
     float cosRotation = cos(rotationRadians);
     float sinRotation = sin(rotationRadians);
     vec3 dir = normalize(vec3(
@@ -113,14 +103,14 @@ vec2 DirectionToLatLong(vec3 direction)
 
 vec3 SampleEnvironment(vec3 direction, float lod)
 {
-    float mipLevel = clamp(lod, 0.0, uEnvironmentMaxLod);
-    return textureLod(uEnvironmentMap, DirectionToLatLong(direction), mipLevel).rgb * uEnvironmentIntensity;
+    float mipLevel = clamp(lod, 0.0, uEnvironmentData.y);
+    return textureLod(uEnvironmentMap, DirectionToLatLong(direction), mipLevel).rgb * uEnvironmentData.x;
 }
 
 vec3 SampleBaseColor()
 {
-    vec3 baseColor = uMaterial.albedo;
-    if (uHasBaseColorTexture == 1)
+    vec3 baseColor = uMaterialAlbedo.rgb;
+    if (uMaterialTextureFlags0.x > 0.5)
     {
         baseColor *= texture(uBaseColorTexture, fs_in.TexCoord).rgb;
     }
@@ -130,10 +120,10 @@ vec3 SampleBaseColor()
 
 vec2 SampleMetallicRoughness()
 {
-    float metallic = uMaterial.metallic;
-    float roughness = uMaterial.roughness;
+    float metallic = uMaterialParams0.x;
+    float roughness = uMaterialParams0.y;
 
-    if (uHasMetallicRoughnessTexture == 1)
+    if (uMaterialTextureFlags0.y > 0.5)
     {
         vec4 metallicRoughness = texture(uMetallicRoughnessTexture, fs_in.TexCoord);
         roughness *= metallicRoughness.g;
@@ -145,11 +135,11 @@ vec2 SampleMetallicRoughness()
 
 float SampleAmbientOcclusion()
 {
-    float occlusion = uMaterial.ao;
-    if (uHasOcclusionTexture == 1)
+    float occlusion = uMaterialParams0.z;
+    if (uMaterialTextureFlags0.w > 0.5)
     {
         float textureOcclusion = texture(uOcclusionTexture, fs_in.TexCoord).r;
-        occlusion *= mix(1.0, textureOcclusion, clamp(uMaterial.occlusionStrength, 0.0, 1.0));
+        occlusion *= mix(1.0, textureOcclusion, clamp(uMaterialParams1.x, 0.0, 1.0));
     }
 
     return clamp(occlusion, 0.0, 1.0);
@@ -157,8 +147,8 @@ float SampleAmbientOcclusion()
 
 vec3 SampleEmissive()
 {
-    vec3 emissive = uMaterial.emissive;
-    if (uHasEmissiveTexture == 1)
+    vec3 emissive = uMaterialEmissive.rgb;
+    if (uMaterialTextureFlags1.x > 0.5)
     {
         emissive *= texture(uEmissiveTexture, fs_in.TexCoord).rgb;
     }
@@ -169,7 +159,7 @@ vec3 SampleEmissive()
 vec3 GetShadingNormal()
 {
     vec3 normal = normalize(fs_in.Normal);
-    if (uHasNormalTexture == 0)
+    if (uMaterialTextureFlags0.z <= 0.5)
     {
         return normal;
     }
@@ -212,7 +202,7 @@ vec3 GetShadingNormal()
     }
 
     vec3 tangentNormal = texture(uNormalTexture, fs_in.TexCoord).xyz * 2.0 - 1.0;
-    tangentNormal.xy *= uMaterial.normalScale;
+    tangentNormal.xy *= uMaterialParams0.w;
 
     mat3 tbn = mat3(tangent, bitangent, normal);
     return normalize(tbn * tangentNormal);
@@ -288,8 +278,8 @@ vec3 EvaluateIBL(
     vec3 kS = fresnel;
     vec3 kD = (vec3(1.0) - kS) * (1.0 - materialMetallic);
 
-    vec3 diffuseEnvironment = SampleEnvironment(normal, max(uEnvironmentMaxLod - 3.0, 0.0));
-    vec3 prefilteredEnvironment = SampleEnvironment(reflected, materialRoughness * uEnvironmentMaxLod);
+    vec3 diffuseEnvironment = SampleEnvironment(normal, max(uEnvironmentData.y - 3.0, 0.0));
+    vec3 prefilteredEnvironment = SampleEnvironment(reflected, materialRoughness * uEnvironmentData.y);
     vec2 envBrdf = texture(uBrdfLut, vec2(nDotV, materialRoughness)).rg;
     vec3 diffuse = diffuseEnvironment * materialAlbedo;
     vec3 specular = prefilteredEnvironment * (fresnel * envBrdf.x + envBrdf.y);
@@ -300,7 +290,7 @@ vec3 EvaluateIBL(
 void main()
 {
     vec3 normal = GetShadingNormal();
-    vec3 viewDirection = normalize(uCameraPosition - fs_in.WorldPos);
+    vec3 viewDirection = normalize(uCameraPosition.xyz - fs_in.WorldPos);
     vec3 materialAlbedo = SampleBaseColor();
     vec2 metallicRoughness = SampleMetallicRoughness();
     float materialMetallic = metallicRoughness.x;
@@ -308,11 +298,11 @@ void main()
     float ambientOcclusion = SampleAmbientOcclusion();
     vec3 emissive = SampleEmissive();
 
-    vec3 lightDirection = normalize(-uDirectionalLight.direction);
+    vec3 lightDirection = normalize(-uDirectionalDirection.xyz);
     float shadow = uEnableShadows == 1
         ? ShadowCalculation(fs_in.FragPosLightSpace, normal, lightDirection)
         : 0.0;
-    vec3 directionalRadiance = uDirectionalLight.color * uDirectionalLight.intensity;
+    vec3 directionalRadiance = uDirectionalColorIntensity.rgb * uDirectionalColorIntensity.a;
 
     vec3 color = (1.0 - shadow) * EvaluateLight(
         normal,
@@ -324,15 +314,15 @@ void main()
         materialRoughness
     );
 
-    vec3 toPointLight = uPointLight.position - fs_in.WorldPos;
+    vec3 toPointLight = uPointPositionRange.xyz - fs_in.WorldPos;
     float pointDistance = length(toPointLight);
-    if (pointDistance < uPointLight.range)
+    if (pointDistance < uPointPositionRange.w)
     {
         vec3 pointLightDirection = normalize(toPointLight);
-        float normalizedDistance = pointDistance / uPointLight.range;
+        float normalizedDistance = pointDistance / uPointPositionRange.w;
         float falloff = clamp(1.0 - normalizedDistance * normalizedDistance, 0.0, 1.0);
         float attenuation = (falloff * falloff) / (1.0 + pointDistance * pointDistance);
-        vec3 pointRadiance = uPointLight.color * uPointLight.intensity * attenuation;
+        vec3 pointRadiance = uPointColorIntensity.rgb * uPointColorIntensity.a * attenuation;
         color += EvaluateLight(
             normal,
             viewDirection,

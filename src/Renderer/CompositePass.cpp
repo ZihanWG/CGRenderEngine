@@ -2,20 +2,20 @@
 
 #include <glad/glad.h>
 
+#include "Assets/ResourceManager.h"
 #include "Renderer/Framebuffer.h"
 #include "Renderer/Mesh.h"
 #include "Renderer/RenderSettings.h"
-#include "Renderer/Shader.h"
 #include "Renderer/Texture2D.h"
 
-void CompositePass::Initialize()
+void CompositePass::Initialize(ResourceManager& resourceManager)
 {
     if (m_Initialized)
     {
         return;
     }
 
-    m_Shader = std::make_unique<Shader>("shaders/fullscreen.vert", "shaders/composite.frag");
+    m_Shader = resourceManager.LoadShader("shaders/fullscreen.vert", "shaders/composite.frag");
     m_Shader->Use();
     m_Shader->SetInt("uSceneColor", 0);
     m_Shader->SetInt("uBloomColor", 1);

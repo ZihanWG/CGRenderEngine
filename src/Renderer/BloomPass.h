@@ -8,6 +8,7 @@
 #include "Renderer/Texture2D.h"
 
 class Mesh;
+class ResourceManager;
 class Texture2D;
 
 struct RenderSettings;
@@ -15,7 +16,7 @@ struct RenderSettings;
 class BloomPass
 {
 public:
-    void Initialize(int width, int height);
+    void Initialize(ResourceManager& resourceManager, int width, int height);
     void Resize(int width, int height);
     void Execute(const Texture2D& sourceTexture, const Mesh& fullscreenQuad, const RenderSettings& settings);
 
@@ -29,7 +30,7 @@ private:
     int m_Width = 0;
     int m_Height = 0;
     int m_LastBlurTextureIndex = 0;
-    std::unique_ptr<Shader> m_Shader;
+    std::shared_ptr<Shader> m_Shader;
     std::array<Framebuffer, 2> m_Framebuffers;
     std::array<Texture2D, 2> m_BlurTextures;
 };

@@ -5,11 +5,11 @@
 
 #include <glad/glad.h>
 
+#include "Assets/ResourceManager.h"
 #include "Renderer/Mesh.h"
 #include "Renderer/RenderSettings.h"
-#include "Renderer/Shader.h"
 
-void BloomPass::Initialize(int width, int height)
+void BloomPass::Initialize(ResourceManager& resourceManager, int width, int height)
 {
     if (m_Initialized)
     {
@@ -17,7 +17,7 @@ void BloomPass::Initialize(int width, int height)
         return;
     }
 
-    m_Shader = std::make_unique<Shader>("shaders/fullscreen.vert", "shaders/blur.frag");
+    m_Shader = resourceManager.LoadShader("shaders/fullscreen.vert", "shaders/blur.frag");
     m_Shader->Use();
     m_Shader->SetInt("uImage", 0);
 

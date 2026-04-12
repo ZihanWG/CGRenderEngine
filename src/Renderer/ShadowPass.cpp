@@ -4,18 +4,18 @@
 
 #include <glad/glad.h>
 
+#include "Assets/ResourceManager.h"
 #include "Renderer/Mesh.h"
-#include "Renderer/Shader.h"
-#include "Scene/Scene.h"
+#include "Renderer/RenderSubmission.h"
 
-void ShadowPass::Initialize()
+void ShadowPass::Initialize(ResourceManager& resourceManager)
 {
     if (m_Initialized)
     {
         return;
     }
 
-    m_Shader = std::make_unique<Shader>("shaders/shadow.vert", "shaders/shadow.frag");
+    m_Shader = resourceManager.LoadShader("shaders/shadow.vert", "shaders/shadow.frag");
     m_ShadowTexture.Allocate(
         kResolution,
         kResolution,
@@ -43,11 +43,11 @@ void ShadowPass::Initialize()
     m_Initialized = true;
 }
 
-void ShadowPass::Execute(const Scene& scene, const glm::mat4& lightSpaceMatrix, bool enabled)
+void ShadowPass::Execute(const RenderSubmission& submission, const glm::mat4& lightSpaceMatrix, bool enabled)
 {
     if (!m_Initialized)
     {
-        Initialize();
+        return;
     }
 
     glViewport(0, 0, kResolution, kResolution);
@@ -64,15 +64,15 @@ void ShadowPass::Execute(const Scene& scene, const glm::mat4& lightSpaceMatrix, 
     m_Shader->Use();
     m_Shader->SetMat4("uLightSpaceMatrix", lightSpaceMatrix);
 
-    for (const RenderObject& object : scene.GetObjects())
+    for (const RenderItem& item : submission.drawItems)
     {
-        if (!object.mesh)
+        if (!item.mesh)
         {
             continue;
         }
 
-        m_Shader->SetMat4("uModel", object.transform.GetMatrix());
-        object.mesh->Draw();
+        m_Shader->SetMat4("uModel", item.modelMatrix);
+        item.mesh->Draw();
     }
 
     glCullFace(GL_BACK);

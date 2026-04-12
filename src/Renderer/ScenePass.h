@@ -5,23 +5,26 @@
 #include <glm/glm.hpp>
 
 #include "Renderer/Framebuffer.h"
+#include "Renderer/MaterialBinder.h"
+#include "Renderer/ShaderBufferManager.h"
 #include "Renderer/Shader.h"
 #include "Renderer/Texture2D.h"
 
 class Camera;
-class Scene;
+class ResourceManager;
 class Texture2D;
 struct EnvironmentImage;
+struct RenderSubmission;
 
 struct RenderSettings;
 
 class ScenePass
 {
 public:
-    void Initialize(int width, int height);
+    void Initialize(ResourceManager& resourceManager, ShaderBufferManager& bufferManager, int width, int height);
     void Resize(int width, int height);
     void Execute(
-        const Scene& scene,
+        const RenderSubmission& submission,
         const Camera& camera,
         const glm::mat4& lightSpaceMatrix,
         const Texture2D& shadowTexture,
@@ -37,7 +40,7 @@ public:
 
 private:
     void AllocateTargets();
-    void GenerateEnvironmentMap(const Scene& scene);
+    void GenerateEnvironmentMap(const RenderSubmission& submission);
     void GenerateBrdfLut();
 
     bool m_Initialized = false;
@@ -46,9 +49,11 @@ private:
     float m_EnvironmentMaxLod = 0.0f;
     bool m_EnvironmentReady = false;
     const EnvironmentImage* m_LastEnvironmentImage = nullptr;
-    std::unique_ptr<Shader> m_Shader;
-    std::unique_ptr<Shader> m_SkyShader;
+    ShaderBufferManager* m_BufferManager = nullptr;
+    std::shared_ptr<Shader> m_Shader;
+    std::shared_ptr<Shader> m_SkyShader;
     std::shared_ptr<class Mesh> m_FullscreenQuad;
+    MaterialBinder m_MaterialBinder;
     Framebuffer m_Framebuffer;
     Texture2D m_SceneColorTexture;
     Texture2D m_BrightTexture;
@@ -56,11 +61,6 @@ private:
     Texture2D m_NormalTexture;
     Texture2D m_MaterialTexture;
     Texture2D m_DepthTexture;
-    Texture2D m_DefaultBaseColorTexture;
-    Texture2D m_DefaultMetallicRoughnessTexture;
-    Texture2D m_DefaultNormalTexture;
-    Texture2D m_DefaultOcclusionTexture;
-    Texture2D m_DefaultEmissiveTexture;
     Texture2D m_EnvironmentTexture;
     Texture2D m_BrdfLutTexture;
     glm::vec3 m_LastEnvironmentLightDirection{0.0f};
