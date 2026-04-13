@@ -1,4 +1,5 @@
 #version 330 core
+// Shadow-map vertex shader. Only position and transforms matter for the depth pass.
 
 layout (location = 0) in vec3 aPosition;
 

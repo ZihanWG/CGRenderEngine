@@ -1,3 +1,4 @@
+// Centralized entry point for cached shaders, builtin meshes, and environment maps.
 #pragma once
 
 #include <memory>

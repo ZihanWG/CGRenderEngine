@@ -1,3 +1,4 @@
+// OpenGL texture allocation and binding helpers for both assets and render targets.
 #include "Renderer/Texture2D.h"
 
 Texture2D::Texture2D()
@@ -29,6 +30,7 @@ void Texture2D::Allocate(
     m_Width = width;
     m_Height = height;
 
+    // The wrapper intentionally keeps state setup in one place so callers do not leak GL state.
     glBindTexture(GL_TEXTURE_2D, m_ID);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glTexImage2D(GL_TEXTURE_2D, 0, static_cast<GLint>(internalFormat), width, height, 0, format, type, data);
@@ -41,6 +43,7 @@ void Texture2D::Allocate(
 
 void Texture2D::SetData(GLenum format, GLenum type, const void* data) const
 {
+    // Update the full image. Partial updates are not needed in this project yet.
     glBindTexture(GL_TEXTURE_2D, m_ID);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_Width, m_Height, format, type, data);

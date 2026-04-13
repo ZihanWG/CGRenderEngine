@@ -1,3 +1,4 @@
+// Top-level render coordinator that owns pass objects and the offline reference job.
 #pragma once
 
 #include <cstddef>
@@ -34,6 +35,7 @@ public:
     void SetSettings(const RenderSettings& settings);
 
 private:
+    // CPU ray-traced frame produced asynchronously for realtime/offline comparison.
     struct ReferenceFrame
     {
         std::vector<glm::vec3> pixels;
@@ -41,8 +43,11 @@ private:
         std::size_t revision = 0;
     };
 
+    // Reallocates viewport-dependent render targets when the window changes size.
     void EnsureRenderTargets(int width, int height);
+    // Starts or consumes the asynchronous ray tracing task when needed.
     void UpdateReference(const class Scene& scene, const class Camera& camera);
+    // Uses a fixed orthographic fit suitable for the demo's sun shadow setup.
     glm::mat4 CalculateLightSpaceMatrix(const RenderSubmission& submission) const;
 
     int m_ViewportWidth = 0;

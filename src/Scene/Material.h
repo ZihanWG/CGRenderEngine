@@ -1,3 +1,4 @@
+// Material parameters shared by the realtime pass and the CPU reference tracer.
 #pragma once
 
 #include <memory>
@@ -15,6 +16,7 @@ struct ImageTexture
     bool srgb = false;
     std::vector<unsigned char> pixels;
 
+    // CPU-side bilinear sampling used by the offline reference renderer.
     glm::vec4 Sample(const glm::vec2& uv) const;
 };
 

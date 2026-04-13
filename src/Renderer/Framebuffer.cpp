@@ -1,3 +1,4 @@
+// Small RAII wrapper around OpenGL framebuffers and their depth renderbuffer, when used.
 #include "Renderer/Framebuffer.h"
 
 #include <vector>
@@ -65,6 +66,7 @@ void Framebuffer::SetDrawBuffers(unsigned int count) const
 {
     Bind();
 
+    // Build the attachment list dynamically so the caller only specifies the color count.
     std::vector<GLenum> attachments(count);
     for (unsigned int i = 0; i < count; ++i)
     {

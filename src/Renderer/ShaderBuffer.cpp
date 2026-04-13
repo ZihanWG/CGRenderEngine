@@ -1,3 +1,4 @@
+// RAII wrapper around OpenGL uniform/storage buffer objects.
 #include "Renderer/ShaderBuffer.h"
 
 #include <stdexcept>
@@ -33,6 +34,7 @@ void ShaderBuffer::SetData(const void* data, std::size_t size, std::size_t offse
         throw std::runtime_error("ShaderBuffer update range is invalid.");
     }
 
+    // Updates use sub-data so persistent buffer handles can stay bound across frames.
     const GLenum target = ResolveTarget();
     glBindBuffer(target, m_ID);
     glBufferSubData(

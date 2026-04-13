@@ -1,3 +1,13 @@
+// Orchestrates the frame graph and bridges realtime rendering with the async reference path.
+//
+// High-level frame flow:
+// 1. react to scene/viewport invalidation
+// 2. build or reuse RenderSubmission
+// 3. schedule passes through RenderGraph
+// 4. let the reference tracer progress opportunistically in the background
+// 5. composite the final image to the default framebuffer
+//
+// This file is the best place to understand how the engine pieces fit together.
 #include "Renderer/Renderer.h"
 
 #include <algorithm>
@@ -14,6 +24,7 @@
 Renderer::Renderer(ResourceManager& resourceManager)
     : m_ResourceManager(resourceManager)
 {
+    // Keep the startup reference workload intentionally small so the window stays responsive.
     m_RayTraceSettings.samplesPerPixel = 2;
     m_RayTraceSettings.maxBounces = 1;
 }
@@ -35,6 +46,7 @@ void Renderer::Initialize(int viewportWidth, int viewportHeight)
     m_ViewportHeight = std::max(viewportHeight, 1);
 
     m_FullscreenQuad = m_ResourceManager.GetFullscreenQuad();
+    // Pass objects own their own GL resources, but the renderer owns their lifetime and order.
     m_ShadowPass.Initialize(m_ResourceManager);
     m_ScenePass.Initialize(m_ResourceManager, m_ShaderBufferManager, m_ViewportWidth, m_ViewportHeight);
     m_BloomPass.Initialize(m_ResourceManager, m_ViewportWidth, m_ViewportHeight);
@@ -51,6 +63,7 @@ void Renderer::RenderFrame(const Scene& scene, const Camera& camera, int viewpor
 
     if (scene.GetContentVersion() != m_LastSceneVersion)
     {
+        // Any scene mutation invalidates both flattened submission data and the reference frame.
         m_LastSceneVersion = scene.GetContentVersion();
         m_SubmissionCache.Invalidate();
         InvalidateReference();
@@ -61,6 +74,12 @@ void Renderer::RenderFrame(const Scene& scene, const Camera& camera, int viewpor
     m_LightSpaceMatrix = CalculateLightSpaceMatrix(submission);
 
     m_RenderGraph.Clear();
+    // Pass order is now data-driven instead of being buried in ad-hoc call order.
+    //
+    // "reference" intentionally has no dependency on the realtime passes because it does
+    // not consume GPU outputs. It only shares the Scene + Camera inputs and can therefore
+    // overlap conceptually with the realtime frame, even though its result is only visible
+    // once the async job completes in a later frame.
     m_RenderGraph.AddPass("shadow", {}, [&]() {
         m_ShadowPass.Execute(submission, m_LightSpaceMatrix, m_Settings.enableShadows);
     });
@@ -100,6 +119,7 @@ void Renderer::RenderFrame(const Scene& scene, const Camera& camera, int viewpor
 
 void Renderer::InvalidateReference()
 {
+    // Revision numbers let stale async jobs finish safely without overwriting newer work.
     ++m_ReferenceRevision;
     m_ReferenceDirty = true;
     m_HasReference = false;
@@ -126,6 +146,7 @@ void Renderer::EnsureRenderTargets(int width, int height)
 
     m_ViewportWidth = safeWidth;
     m_ViewportHeight = safeHeight;
+    // ShadowPass uses a fixed map size, so only scene/bloom/reference depend on the viewport.
     m_ScenePass.Resize(m_ViewportWidth, m_ViewportHeight);
     m_BloomPass.Resize(m_ViewportWidth, m_ViewportHeight);
     InvalidateReference();
@@ -139,6 +160,9 @@ void Renderer::UpdateReference(const Scene& scene, const Camera& camera)
         m_RayTraceFuture.valid() &&
         m_RayTraceFuture.wait_for(0ms) == std::future_status::ready)
     {
+        // Consume the completed job without blocking the frame loop.
+        // The revision guard matters because the user may have moved the camera or resized
+        // the window while the worker thread was still tracing an older frame.
         ReferenceFrame referenceFrame = m_RayTraceFuture.get();
         m_RayTraceInFlight = false;
 
@@ -164,6 +188,7 @@ void Renderer::UpdateReference(const Scene& scene, const Camera& camera)
 
     const float aspectRatio = static_cast<float>(m_ViewportWidth) / static_cast<float>(std::max(m_ViewportHeight, 1));
     RayTraceSettings activeSettings = m_RayTraceSettings;
+    // Downsample the reference image so the CPU path remains a background comparison tool.
     activeSettings.width = std::clamp(m_ViewportWidth / 3, 200, 320);
     activeSettings.height = std::max(
         120,
@@ -174,6 +199,8 @@ void Renderer::UpdateReference(const Scene& scene, const Camera& camera)
     const Camera cameraCopy = camera;
     const std::size_t revision = m_ReferenceRevision;
 
+    // Launch on a worker thread so the first presented frame does not stall on tracing.
+    // Scene and Camera are copied on purpose: the worker must not read mutable engine state.
     m_ReferenceDirty = false;
     m_RayTraceInFlight = true;
     m_RayTraceFuture = std::async(std::launch::async, [this, sceneCopy, cameraCopy, activeSettings, revision]() {

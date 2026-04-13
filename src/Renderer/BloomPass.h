@@ -1,3 +1,4 @@
+// Applies a separable Gaussian blur to the bright-pass texture for bloom.
 #pragma once
 
 #include <array>
@@ -23,6 +24,7 @@ public:
     const Texture2D& ResolveOutputTexture(const Texture2D& sourceTexture) const;
 
 private:
+    // Ping-pong blur targets sized to the current viewport.
     void AllocateTargets();
 
     bool m_Initialized = false;

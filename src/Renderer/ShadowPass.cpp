@@ -1,3 +1,4 @@
+// Directional shadow-map pass used by the forward PBR shader.
 #include "Renderer/ShadowPass.h"
 
 #include <stdexcept>
@@ -29,6 +30,7 @@ void ShadowPass::Initialize(ResourceManager& resourceManager)
         GL_CLAMP_TO_BORDER
     );
     m_ShadowTexture.SetBorderColor(1.0f, 1.0f, 1.0f, 1.0f);
+    // Border depth stays lit outside the map to avoid hard clipping at the cascade edge.
 
     m_Framebuffer.Bind();
     m_Framebuffer.AttachDepthTexture(m_ShadowTexture);
@@ -61,6 +63,7 @@ void ShadowPass::Execute(const RenderSubmission& submission, const glm::mat4& li
     }
 
     glCullFace(GL_FRONT);
+    // Front-face culling reduces self-shadow acne on closed meshes in this simple setup.
     m_Shader->Use();
     m_Shader->SetMat4("uLightSpaceMatrix", lightSpaceMatrix);
 

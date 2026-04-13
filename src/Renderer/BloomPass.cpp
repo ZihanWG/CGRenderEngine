@@ -1,3 +1,4 @@
+// Ping-pong Gaussian blur used to spread bright highlights into a bloom texture.
 #include "Renderer/BloomPass.h"
 
 #include <algorithm>
@@ -36,6 +37,7 @@ void BloomPass::Execute(const Texture2D& sourceTexture, const Mesh& fullscreenQu
 {
     if (!settings.enableBloom || settings.bloomPasses <= 0)
     {
+        // Fall back to the original bright-pass texture when bloom is disabled.
         m_UsesSourceTexture = true;
         return;
     }
@@ -49,6 +51,7 @@ void BloomPass::Execute(const Texture2D& sourceTexture, const Mesh& fullscreenQu
 
     for (int i = 0; i < settings.bloomPasses; ++i)
     {
+        // Alternate horizontal and vertical blur passes between the two intermediate targets.
         const int targetIndex = horizontal ? 0 : 1;
         const int sourceIndex = horizontal ? 1 : 0;
 

@@ -1,3 +1,4 @@
+// Shared environment sampling utilities used by both GPU preparation and CPU tracing.
 #pragma once
 
 #include <memory>
@@ -16,7 +17,9 @@ struct EnvironmentImage
     int channels = 0;
     std::vector<float> pixels;
 
+    // Basic validation so callers can fall back without checking dimensions manually.
     bool IsValid() const;
+    // Bilinearly sample a lat-long HDR image with optional yaw rotation.
     glm::vec3 Sample(const glm::vec3& direction, float rotationDegrees = 0.0f) const;
 };
 

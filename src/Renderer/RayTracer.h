@@ -1,3 +1,4 @@
+// CPU path tracer-lite used as an offline-ish reference against the realtime renderer.
 #pragma once
 
 #include <cstddef>
@@ -30,6 +31,7 @@ public:
     );
 
 private:
+    // Cached BVH and flattened triangles are reused until scene geometry changes.
     struct CachedAcceleration;
     const CachedAcceleration& GetCachedAcceleration(const Scene& scene);
 

@@ -1,3 +1,4 @@
+// Shader program wrapper that handles source loading, compile/link, and common uniforms.
 #pragma once
 
 #include <glm/glm.hpp>
@@ -18,6 +19,7 @@ public:
     void SetUniformBlockBinding(const std::string& blockName, unsigned int bindingIndex) const;
 
 private:
+    // Project-relative paths are resolved against the configured asset root.
     int GetUniformLocation(const std::string& name) const;
 
     unsigned int m_ID = 0;

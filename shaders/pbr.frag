@@ -1,4 +1,5 @@
 #version 330 core
+// Forward PBR lighting pass with shadows, IBL, bloom extraction, and debug MRT outputs.
 
 layout (location = 0) out vec4 FragColor;
 layout (location = 1) out vec4 BrightColor;
@@ -88,6 +89,7 @@ vec3 FresnelSchlick(float cosTheta, vec3 f0)
 
 vec2 DirectionToLatLong(vec3 direction)
 {
+    // Match the CPU and sky-pass environment rotation convention.
     float rotationRadians = radians(uEnvironmentData.z);
     float cosRotation = cos(rotationRadians);
     float sinRotation = sin(rotationRadians);
@@ -103,6 +105,7 @@ vec2 DirectionToLatLong(vec3 direction)
 
 vec3 SampleEnvironment(vec3 direction, float lod)
 {
+    // Specular IBL selects a mip level from roughness; diffuse uses a coarser one.
     float mipLevel = clamp(lod, 0.0, uEnvironmentData.y);
     return textureLod(uEnvironmentMap, DirectionToLatLong(direction), mipLevel).rgb * uEnvironmentData.x;
 }
@@ -158,6 +161,7 @@ vec3 SampleEmissive()
 
 vec3 GetShadingNormal()
 {
+    // Use the provided tangent basis when possible, but keep a derivative fallback for simple meshes.
     vec3 normal = normalize(fs_in.Normal);
     if (uMaterialTextureFlags0.z <= 0.5)
     {
@@ -210,6 +214,7 @@ vec3 GetShadingNormal()
 
 float ShadowCalculation(vec4 fragPosLightSpace, vec3 normal, vec3 lightDirection)
 {
+    // Basic 3x3 PCF shadow filter for the single directional light.
     vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
     projCoords = projCoords * 0.5 + 0.5;
 
@@ -271,6 +276,7 @@ vec3 EvaluateIBL(
     float ambientOcclusion
 )
 {
+    // Split-sum approximation: diffuse from low-frequency environment, specular from prefiltered mips + LUT.
     vec3 reflected = reflect(-viewDirection, normal);
     float nDotV = max(dot(normal, viewDirection), 0.0);
     vec3 f0 = mix(vec3(0.04), materialAlbedo, materialMetallic);
@@ -353,6 +359,7 @@ void main()
     color = max(color, vec3(0.0));
 
     float brightness = dot(color, vec3(0.2126, 0.7152, 0.0722));
+    // Emissive is always preserved in the bright pass so light sources bloom consistently.
     vec3 brightValue = brightness > 1.0 ? color : emissive;
 
     FragColor = vec4(color, 1.0);

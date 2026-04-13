@@ -1,3 +1,4 @@
+// Converts scene transform state into model matrices used by submission and ray tracing.
 #include "Scene/Transform.h"
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -6,6 +7,7 @@ glm::mat4 Transform::GetMatrix() const
 {
     if (useMatrixOverride)
     {
+        // glTF imports can preserve the exact authored matrix instead of decomposing it.
         return matrixOverride;
     }
 

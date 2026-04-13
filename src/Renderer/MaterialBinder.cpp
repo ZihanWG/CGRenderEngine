@@ -1,3 +1,11 @@
+// Encodes material state into the shared material UBO and stable texture bindings.
+//
+// The binder exists so passes do not need to know:
+// - which texture units are reserved for which material maps
+// - what the fallback textures are when a slot is missing
+// - how scalar material parameters are packed into the uniform block
+//
+// In a larger engine this would usually expand into descriptor/state caching.
 #include "Renderer/MaterialBinder.h"
 
 #include "Scene/Material.h"
@@ -7,6 +15,7 @@ void MaterialBinder::Initialize(ShaderBufferManager& bufferManager)
     m_BufferManager = &bufferManager;
     m_BufferManager->InitializeUniformBuffer(BufferBindingSlot::Material, sizeof(MaterialUniformData));
 
+    // Small fallback textures let shaders stay branch-light even when a material slot is absent.
     const unsigned char whitePixel[] = {255, 255, 255, 255};
     const unsigned char normalPixel[] = {128, 128, 255, 255};
     const unsigned char blackPixel[] = {0, 0, 0, 255};
@@ -55,6 +64,16 @@ void MaterialBinder::Initialize(ShaderBufferManager& bufferManager)
 
 void MaterialBinder::Bind(const Material& material) const
 {
+    // Keep texture presence as flags in the UBO so shaders know whether to sample each slot.
+    // Binding policy is intentionally stable:
+    // slot 1 = baseColor
+    // slot 2 = metallicRoughness
+    // slot 3 = normal
+    // slot 4 = occlusion
+    // slot 5 = emissive
+    //
+    // Because those bindings never change, the shader setup path is simple and the
+    // ScenePass can bind a material with one call instead of many scattered calls.
     MaterialUniformData materialData;
     materialData.albedo = glm::vec4(material.albedo, 1.0f);
     materialData.emissive = glm::vec4(material.emissive, 1.0f);

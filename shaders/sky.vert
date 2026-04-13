@@ -1,4 +1,5 @@
 #version 330 core
+// Fullscreen sky pass shared with the scene MRT layout.
 
 layout (location = 0) in vec3 aPosition;
 layout (location = 2) in vec2 aTexCoord;

@@ -1,3 +1,4 @@
+// Program entry point: construct the application and keep fatal errors visible.
 #include "Core/Application.h"
 #include <iostream>
 

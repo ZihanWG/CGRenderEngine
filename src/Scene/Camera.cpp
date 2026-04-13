@@ -1,3 +1,4 @@
+// Camera math for view/projection matrices, fly movement, and ray generation.
 #include "Scene/Camera.h"
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -18,6 +19,7 @@ Camera::Camera(
       m_NearClip(nearClip),
       m_FarClip(farClip)
 {
+    // Seed yaw/pitch from the initial look-at target so mouse look starts aligned.
     const glm::vec3 forward = glm::normalize(m_Target - m_Position);
     m_YawDegrees = glm::degrees(glm::atan(forward.z, forward.x));
     m_PitchDegrees = glm::degrees(glm::asin(glm::clamp(forward.y, -1.0f, 1.0f)));
@@ -89,6 +91,7 @@ glm::vec3 Camera::GetUp() const
 
 glm::vec3 Camera::GenerateRayDirection(float u, float v) const
 {
+    // Reconstruct the direction from the camera basis instead of inverting a matrix per ray.
     const float tanHalfFov = glm::tan(glm::radians(m_FovDegrees) * 0.5f);
     const float px = (2.0f * u - 1.0f) * m_AspectRatio * tanHalfFov;
     const float py = (2.0f * v - 1.0f) * tanHalfFov;

@@ -1,3 +1,4 @@
+// Thin GLFW/GLAD wrapper that owns the native window and resize state.
 #pragma once
 
 struct GLFWwindow;
@@ -22,6 +23,7 @@ public:
     static double GetTimeSeconds();
 
 private:
+    // Keeps the cached size in sync with GLFW and marks the swapchain as dirty.
     static void FramebufferSizeCallback(GLFWwindow* window, int width, int height);
 
     GLFWwindow* m_Window = nullptr;

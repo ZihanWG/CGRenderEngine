@@ -1,3 +1,4 @@
+// ResourceManager turns path or parameter tuples into shared cached engine assets.
 #include "Assets/ResourceManager.h"
 
 #include <sstream>
@@ -12,6 +13,7 @@ std::shared_ptr<Shader> ResourceManager::LoadShader(
     const std::string& fragmentPath
 )
 {
+    // Vertex/fragment pairs identify a unique program in this project.
     const std::string key = vertexPath + "|" + fragmentPath;
     return m_ShaderCache.GetOrCreate(key, [&]() {
         return std::make_shared<Shader>(vertexPath, fragmentPath);
@@ -58,6 +60,7 @@ std::shared_ptr<EnvironmentImage> ResourceManager::LoadEnvironment(
 )
 {
     return m_EnvironmentCache.GetOrCreate(path, [&]() {
+        // Surface the loader error so callers can fall back to the procedural sky.
         std::string localError;
         std::shared_ptr<EnvironmentImage> environment = LoadHdrEnvironment(path, &localError);
         if (!environment)

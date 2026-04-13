@@ -1,3 +1,4 @@
+// Lightweight transform that supports both authored TRS and a full matrix override.
 #pragma once
 
 #include <glm/glm.hpp>
@@ -11,5 +12,6 @@ struct Transform
     bool useMatrixOverride = false;
     glm::mat4 matrixOverride{1.0f};
 
+    // Returns either the override matrix or the TRS-composed model matrix.
     glm::mat4 GetMatrix() const;
 };

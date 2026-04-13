@@ -1,4 +1,5 @@
 #version 330 core
+// Fullscreen triangle/quad vertex path shared by blur, sky, and composite passes.
 
 layout (location = 0) in vec3 aPosition;
 layout (location = 2) in vec2 aTexCoord;

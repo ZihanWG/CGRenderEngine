@@ -1,3 +1,4 @@
+// Minimal analytic light types used by both realtime shading and the CPU reference path.
 #pragma once
 
 #include <glm/glm.hpp>

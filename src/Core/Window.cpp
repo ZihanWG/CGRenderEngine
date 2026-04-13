@@ -1,3 +1,4 @@
+// Initializes the OpenGL context and exposes the small window API used by the app.
 #include "Core/Window.h"
 
 #include <iostream>
@@ -26,6 +27,7 @@ Window::Window(int width, int height, const char* title)
     }
 
     glfwMakeContextCurrent(m_Window);
+    // V-sync keeps the demo stable and avoids burning a core on uncapped presentation.
     glfwSwapInterval(1);
     glfwSetWindowUserPointer(m_Window, this);
     glfwSetFramebufferSizeCallback(m_Window, FramebufferSizeCallback);

@@ -1,3 +1,4 @@
+// CPU-side flattened submission structures consumed by the render passes.
 #pragma once
 
 #include <cstddef>
@@ -40,6 +41,7 @@ struct RenderSubmission
 class RenderSubmissionCache
 {
 public:
+    // Rebuild only when the Scene version changes; otherwise return cached draw items.
     const RenderSubmission& Build(const Scene& scene);
     void Invalidate();
 

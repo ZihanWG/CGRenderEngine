@@ -1,3 +1,4 @@
+// Shared HDR/procedural environment sampling used by both CPU and GPU paths.
 #include "Renderer/EnvironmentLighting.h"
 
 #include <algorithm>
@@ -32,6 +33,7 @@ namespace
 
     glm::vec2 DirectionToLatLong(const glm::vec3& direction, float rotationDegrees)
     {
+        // Yaw the environment around world up so art direction does not require rebaking assets.
         const float rotationRadians = glm::radians(rotationDegrees);
         const float cosRotation = std::cos(rotationRadians);
         const float sinRotation = std::sin(rotationRadians);
@@ -75,6 +77,7 @@ glm::vec3 EnvironmentImage::Sample(const glm::vec3& direction, float rotationDeg
         return glm::vec3(0.0f);
     }
 
+    // Match the GPU environment lookup with bilinear filtering in lat-long space.
     const glm::vec2 uv = DirectionToLatLong(direction, rotationDegrees);
     const float x = uv.x * static_cast<float>(width) - 0.5f;
     const float y = uv.y * static_cast<float>(height) - 0.5f;
@@ -104,6 +107,7 @@ std::shared_ptr<EnvironmentImage> LoadHdrEnvironment(
     std::string* errorMessage
 )
 {
+    // stb_image returns interleaved float pixels directly in linear HDR space.
     const std::string resolvedPath = ResolveAssetPath(path);
     int width = 0;
     int height = 0;
@@ -135,6 +139,7 @@ glm::vec3 SampleProceduralEnvironment(
     const glm::vec3& direction
 )
 {
+    // Simple analytic sky/ground/sun model used when no external HDRI is available.
     const glm::vec3 dir = glm::normalize(direction);
     const glm::vec3 skyZenith(0.11f, 0.22f, 0.46f);
     const glm::vec3 skyHorizon(0.72f, 0.81f, 0.94f);
@@ -172,5 +177,6 @@ glm::vec3 SampleSceneEnvironment(
         return environment.hdrImage->Sample(direction, environment.rotationDegrees);
     }
 
+    // Procedural sky is the explicit fallback, not an accidental default.
     return SampleProceduralEnvironment(directionalLight, direction);
 }

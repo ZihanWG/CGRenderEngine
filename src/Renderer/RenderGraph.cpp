@@ -1,3 +1,4 @@
+// Executes render passes once their named dependencies have been satisfied.
 #include "Renderer/RenderGraph.h"
 
 #include <stdexcept>
@@ -23,6 +24,7 @@ void RenderGraph::AddPass(
 
 void RenderGraph::Execute() const
 {
+    // A simple incremental scheduler is enough here because the graph is tiny and rebuilt every frame.
     std::unordered_set<std::string> executed;
     std::size_t executedCount = 0;
 
@@ -64,6 +66,7 @@ void RenderGraph::Execute() const
 
         if (!progressed)
         {
+            // Cycles or missing dependencies should fail loudly instead of silently skipping passes.
             throw std::runtime_error("RenderGraph contains an unresolved pass dependency cycle.");
         }
     }

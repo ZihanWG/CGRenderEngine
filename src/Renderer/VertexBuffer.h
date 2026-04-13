@@ -1,3 +1,4 @@
+// Legacy VBO helper kept for simple examples outside the main Mesh abstraction.
 #pragma once
 
 class VertexBuffer

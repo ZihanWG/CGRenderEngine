@@ -1,3 +1,4 @@
+// High-level scene container. Dirty tracking is version-based to keep CPU submission cheap.
 #pragma once
 
 #include <memory>
@@ -22,9 +23,11 @@ struct RenderObject
 class Scene
 {
 public:
+    // Any structural or mutable access bumps the content version for cached render data.
     void MarkDirty();
     std::size_t GetContentVersion() const { return m_ContentVersion; }
 
+    // Stores the object and returns a mutable reference to the inserted entry.
     RenderObject& AddObject(RenderObject object);
 
     std::vector<RenderObject>& GetObjects()

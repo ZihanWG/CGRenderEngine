@@ -1,3 +1,4 @@
+// Small framebuffer wrapper used by the render passes to attach textures and validate setup.
 #pragma once
 
 class Texture2D;
@@ -17,6 +18,7 @@ public:
     void AttachColorTexture(const Texture2D& texture, unsigned int index) const;
     void AttachDepthTexture(const Texture2D& texture) const;
     void CreateDepthRenderbuffer(int width, int height);
+    // The draw buffer list must match the currently attached color targets.
     void SetDrawBuffers(unsigned int count) const;
     bool CheckComplete() const;
 
