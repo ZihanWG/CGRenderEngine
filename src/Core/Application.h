@@ -1,3 +1,4 @@
+// Owns the main engine loop, demo scene setup, and runtime input bindings.
 #pragma once
 
 #include <array>
@@ -18,9 +19,13 @@ public:
     void Run();
 
 private:
+    // Builds the sample scene used to exercise the renderer pipeline.
     Scene BuildDemoScene();
+    // Applies camera motion and renderer hotkeys once per frame.
     void HandleInput(float deltaTime);
+    // Prints the runtime controls once at startup.
     void PrintControls() const;
+    // Converts "pressed this frame" behavior into a latched toggle key.
     bool ConsumeToggleKey(int key, bool& latch) const;
 
     ResourceManager m_ResourceManager;

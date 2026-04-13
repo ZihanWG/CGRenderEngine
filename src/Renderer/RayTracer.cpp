@@ -1,3 +1,11 @@
+// CPU reference renderer with cached BVH acceleration and shared material semantics.
+//
+// This is not meant to be a film renderer. Its purpose is narrower:
+// - provide a second rendering path with different failure modes
+// - let the user compare realtime and offline-ish results side by side
+// - reuse the same scene/material inputs as much as possible
+//
+// The implementation therefore favors clarity and reuse over physical completeness.
 #include "Renderer/RayTracer.h"
 
 #include <algorithm>
@@ -169,6 +177,7 @@ namespace
         float& outV
     )
     {
+        // Standard Moller-Trumbore intersection with a small epsilon to reject self-hits.
         const glm::vec3 edge1 = p1 - p0;
         const glm::vec3 edge2 = p2 - p0;
         const glm::vec3 pVec = glm::cross(ray.direction, edge2);
@@ -199,6 +208,7 @@ namespace
 
     bool IntersectAABB(const Ray& ray, const AABB& bounds, float tMin, float tMax, float& outNearT)
     {
+        // Slab test used by BVH traversal. Returns the near entry distance for child ordering.
         float nearT = tMin;
         float farT = tMax;
 
@@ -277,6 +287,7 @@ namespace
 
     std::size_t ComputeSceneGeometryHash(const Scene& scene)
     {
+        // Cache invalidation is based on mesh identity plus object transforms.
         std::size_t seed = 0x6eed0e9da4d94a4full;
         const auto& objects = scene.GetObjects();
         HashCombine(seed, objects.size());
@@ -331,6 +342,7 @@ namespace
         const glm::vec4& interpolatedTangent
     )
     {
+        // Prefer authored tangents; reconstruct them from UV gradients only as a fallback.
         const glm::vec3 fallbackNormal = SafeNormalize(interpolatedNormal, glm::vec3(0.0f, 1.0f, 0.0f));
         const glm::vec3 fallbackTangent = BuildFallbackTangent(fallbackNormal);
         if (!primitive || !material.normalTextureData)
@@ -393,6 +405,7 @@ namespace
 
     MaterialSample SampleMaterial(const Material& material, const glm::vec2& texCoord)
     {
+        // Mirror the realtime material conventions closely so comparisons stay meaningful.
         MaterialSample sample;
         sample.albedo = material.albedo;
         sample.metallic = material.metallic;
@@ -428,6 +441,7 @@ namespace
         const Vertex& v2
     )
     {
+        // Flatten scene geometry into world-space triangles so the BVH can ignore object graphs.
         TrianglePrimitive primitive;
         const glm::mat3 modelMatrix = glm::mat3(model);
         primitive.positions[0] = glm::vec3(model * glm::vec4(v0.position, 1.0f));
@@ -467,6 +481,7 @@ namespace
 
     int BuildBVHRecursive(SceneAcceleration& acceleration, int start, int end)
     {
+        // Median split on the longest centroid axis is simple but performs well enough here.
         const int nodeIndex = static_cast<int>(acceleration.nodes.size());
         acceleration.nodes.push_back({});
         BVHNode& node = acceleration.nodes.back();
@@ -514,6 +529,7 @@ namespace
 
     SceneAcceleration BuildSceneAcceleration(const Scene& scene)
     {
+        // Build a flat list of world-space triangles once, then accelerate that representation.
         SceneAcceleration acceleration;
         const auto& objects = scene.GetObjects();
 
@@ -566,6 +582,7 @@ namespace
             return false;
         }
 
+        // Iterative traversal avoids recursion and keeps traversal state explicit.
         bool hitAnything = false;
         std::vector<int> stack;
         stack.reserve(64);
@@ -585,6 +602,7 @@ namespace
 
             if (node.IsLeaf())
             {
+                // Leaves store a contiguous primitive range, so no extra indirection is needed.
                 for (int primitiveOffset = 0; primitiveOffset < node.primitiveCount; ++primitiveOffset)
                 {
                     const TrianglePrimitive& primitive =
@@ -707,6 +725,14 @@ namespace
         const RayTraceSettings& settings
     )
     {
+        // This is intentionally a small reference integrator, not a physically complete path tracer.
+        //
+        // Shading order:
+        // 1. intersect scene or fall back to environment
+        // 2. sample material textures on CPU
+        // 3. evaluate direct directional + point light
+        // 4. add a cheap environment ambient term
+        // 5. optionally recurse once for glossy reflection
         HitInfo hitInfo;
         if (!IntersectScene(acceleration, ray, hitInfo))
         {
@@ -776,6 +802,7 @@ namespace
 
         if (depth < settings.maxBounces)
         {
+            // The secondary bounce is a rough glossy reflection used to expose major shading gaps.
             const glm::vec3 f0 = glm::mix(glm::vec3(0.04f), material.albedo, material.metallic);
             const glm::vec3 fresnel = FresnelSchlick(glm::max(glm::dot(normal, viewDirection), 0.0f), f0);
             glm::vec3 reflectionDirection = glm::reflect(ray.direction, normal);
@@ -814,6 +841,8 @@ const RayTracer::CachedAcceleration& RayTracer::GetCachedAcceleration(const Scen
     const std::size_t geometryHash = ComputeSceneGeometryHash(scene);
     if (!m_CachedAcceleration || m_CachedAcceleration->geometryHash != geometryHash)
     {
+        // Geometry rebuilds are amortized across many reference bakes until the scene changes.
+        // Material or light changes do not require rebuilding because the BVH only depends on geometry.
         m_CachedAcceleration = std::make_unique<CachedAcceleration>(CachedAcceleration{
             geometryHash,
             BuildSceneAcceleration(scene)
@@ -833,6 +862,8 @@ std::vector<glm::vec3> RayTracer::Render(
     const SceneAcceleration& acceleration = cachedAcceleration.acceleration;
     std::vector<glm::vec3> pixels(static_cast<std::size_t>(settings.width * settings.height));
 
+    // This render is embarrassingly parallel, but kept single-threaded inside the worker task
+    // for simplicity. The outer async job already moves the expensive work off the main thread.
     for (int y = 0; y < settings.height; ++y)
     {
         for (int x = 0; x < settings.width; ++x)
@@ -841,6 +872,7 @@ std::vector<glm::vec3> RayTracer::Render(
 
             for (int sample = 0; sample < settings.samplesPerPixel; ++sample)
             {
+                // Hammersley jitter gives deterministic stratified supersampling without RNG state.
                 const glm::vec2 jitter = Hammersley(
                     static_cast<unsigned int>(sample),
                     static_cast<unsigned int>(settings.samplesPerPixel)

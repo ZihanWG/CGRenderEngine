@@ -1,3 +1,4 @@
+// Scene only owns data; systems derive renderable state through versioned rebuilds.
 #include "Scene/Scene.h"
 
 void Scene::MarkDirty()

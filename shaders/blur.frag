@@ -1,4 +1,5 @@
 #version 330 core
+// One pass of a separable Gaussian blur. Direction is selected by uHorizontal.
 
 out vec4 FragColor;
 
@@ -9,6 +10,7 @@ uniform int uHorizontal;
 
 void main()
 {
+    // Five taps per side keeps bloom soft enough without making the post pass too heavy.
     const float weights[5] = float[](0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216);
     vec2 texelSize = 1.0 / vec2(textureSize(uImage, 0));
 

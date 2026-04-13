@@ -1,3 +1,4 @@
+// Minimal 2D texture wrapper for render targets, materials, and environment maps.
 #pragma once
 
 #include <glad/glad.h>
@@ -11,6 +12,7 @@ public:
     Texture2D(const Texture2D&) = delete;
     Texture2D& operator=(const Texture2D&) = delete;
 
+    // Allocate immutable dimensions and upload optional initial texel data.
     void Allocate(
         int width,
         int height,

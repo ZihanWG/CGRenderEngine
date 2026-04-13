@@ -1,3 +1,4 @@
+// Owns material default textures and writes per-draw material data into the shared UBO.
 #pragma once
 
 #include "Renderer/RenderBufferTypes.h"
@@ -10,6 +11,7 @@ class MaterialBinder
 {
 public:
     void Initialize(ShaderBufferManager& bufferManager);
+    // Bind all textures and upload the material block expected by the PBR shader.
     void Bind(const Material& material) const;
 
 private:

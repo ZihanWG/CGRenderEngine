@@ -1,3 +1,4 @@
+// Builtin primitive generation and immutable mesh upload to GPU buffers.
 #include "Renderer/Mesh.h"
 
 #include <glad/glad.h>
@@ -39,6 +40,7 @@ Mesh::~Mesh()
 
 std::shared_ptr<Mesh> Mesh::CreateCube(float size)
 {
+    // Cube vertices stay duplicated per face so normals/UVs remain correct for hard edges.
     const float h = size * 0.5f;
     std::vector<Vertex> vertices = {
         {{-h, -h,  h}, { 0.0f,  0.0f,  1.0f}, {0.0f, 0.0f}},
@@ -100,6 +102,7 @@ std::shared_ptr<Mesh> Mesh::CreatePlane(float size, float uvScale)
 
 std::shared_ptr<Mesh> Mesh::CreateSphere(float radius, int xSegments, int ySegments)
 {
+    // UV sphere is sufficient for demo content and keeps the mesh generator compact.
     std::vector<Vertex> vertices;
     std::vector<std::uint32_t> indices;
 
@@ -166,6 +169,7 @@ std::shared_ptr<Mesh> Mesh::CreateFullscreenQuad()
 
 void Mesh::Upload()
 {
+    // The vertex layout mirrors the shader inputs used by the PBR and fullscreen passes.
     glGenVertexArrays(1, &m_VAO);
     glGenBuffers(1, &m_VBO);
     glGenBuffers(1, &m_EBO);

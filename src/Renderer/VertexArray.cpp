@@ -1,3 +1,4 @@
+// Legacy VAO helper retained for small standalone experiments.
 #include "Renderer/VertexArray.h"
 #include "Renderer/VertexBuffer.h"
 #include "Renderer/IndexBuffer.h"
@@ -29,6 +30,7 @@ void VertexArray::AddVertexBuffer_Position3f(const VertexBuffer& vbo)
     Bind();
     vbo.Bind();
 
+    // This helper only exposes a position-only layout because that is all the legacy samples need.
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 }

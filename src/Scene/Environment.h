@@ -1,3 +1,4 @@
+// Scene-owned environment selection. The renderer can fall back if no HDR is present.
 #pragma once
 
 #include <memory>

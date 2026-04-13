@@ -1,3 +1,4 @@
+// CPU-owned vertex/index data plus the uploaded OpenGL buffers for drawing it.
 #pragma once
 
 #include <cstdint>
@@ -11,6 +12,7 @@ struct Vertex
     glm::vec3 position{0.0f};
     glm::vec3 normal{0.0f, 1.0f, 0.0f};
     glm::vec2 texCoord{0.0f};
+    // Tangent.xyz plus handedness in w for normal mapping.
     glm::vec4 tangent{0.0f, 0.0f, 0.0f, 0.0f};
 };
 
@@ -35,6 +37,7 @@ public:
     static std::shared_ptr<Mesh> CreateFullscreenQuad();
 
 private:
+    // Upload the CPU mesh once at construction time; meshes are immutable afterward.
     void Upload();
 
     unsigned int m_VAO = 0;

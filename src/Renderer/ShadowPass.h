@@ -1,3 +1,4 @@
+// Renders a single directional-light shadow map used by the forward PBR pass.
 #pragma once
 
 #include <memory>

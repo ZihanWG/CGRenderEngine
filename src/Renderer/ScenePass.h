@@ -1,3 +1,4 @@
+// Main realtime scene pass. Produces HDR color plus debug G-buffer style outputs.
 #pragma once
 
 #include <memory>
@@ -39,8 +40,11 @@ public:
     const Texture2D& GetDepthTexture() const { return m_DepthTexture; }
 
 private:
+    // Allocate the MRT framebuffer used by the scene pass and debug views.
     void AllocateTargets();
+    // Upload either the HDR environment texture or a generated procedural sky map.
     void GenerateEnvironmentMap(const RenderSubmission& submission);
+    // Precompute the split-sum BRDF approximation once for specular IBL.
     void GenerateBrdfLut();
 
     bool m_Initialized = false;

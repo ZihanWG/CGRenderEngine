@@ -1,3 +1,4 @@
+// CPU texture sampling helpers for offline material evaluation.
 #include "Scene/Material.h"
 
 #include <algorithm>
@@ -5,6 +6,7 @@
 
 namespace
 {
+    // Texture sampling wraps in UV space so the CPU path matches OpenGL repeat mode.
     int WrapIndex(int value, int size)
     {
         const int wrapped = value % size;
@@ -45,6 +47,7 @@ namespace
 
 glm::vec4 ImageTexture::Sample(const glm::vec2& uv) const
 {
+    // Match GPU bilinear filtering closely enough for realtime/reference comparisons.
     if (width <= 0 || height <= 0 || channels <= 0 || pixels.empty())
     {
         return glm::vec4(1.0f);

@@ -1,3 +1,4 @@
+// Legacy VAO helper kept for simple experiments alongside the Mesh wrapper.
 #pragma once
 
 class VertexBuffer;

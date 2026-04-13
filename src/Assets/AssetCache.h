@@ -1,3 +1,4 @@
+// Generic on-demand cache used by the resource manager for shared engine assets.
 #pragma once
 
 #include <memory>
@@ -11,6 +12,7 @@ public:
     template <typename LoaderT>
     std::shared_ptr<AssetT> GetOrCreate(const std::string& key, LoaderT&& loader)
     {
+        // Assets are keyed by a stable string so repeated requests reuse GPU objects.
         const auto found = m_Assets.find(key);
         if (found != m_Assets.end())
         {

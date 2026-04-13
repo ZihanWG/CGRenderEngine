@@ -1,4 +1,5 @@
 #version 330 core
+// Final post process: debug-view selection, tone mapping, vignette, and optional split compare.
 
 out vec4 FragColor;
 
@@ -19,6 +20,7 @@ uniform int uDebugView;
 
 vec3 ToneMap(vec3 color)
 {
+    // ACES-style fit keeps highlights controlled while staying inexpensive.
     color *= uExposure;
     color = (color * (2.51 * color + 0.03)) / (color * (2.43 * color + 0.59) + 0.14);
     color = clamp(color, 0.0, 1.0);
@@ -81,6 +83,7 @@ void main()
 
     if (uDebugView == 6)
     {
+        // Depth is linearized so the debug output is visually meaningful.
         float depth = texture(uDepthTexture, vTexCoord).r;
         float linearDepth = LinearizeDepth(depth) / 40.0;
         FragColor = vec4(vec3(clamp(linearDepth, 0.0, 1.0)), 1.0);

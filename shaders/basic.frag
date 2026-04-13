@@ -1,4 +1,5 @@
 #version 330 core
+// Minimal solid-color fragment shader kept for simple smoke tests.
 out vec4 FragColor;
 
 void main()

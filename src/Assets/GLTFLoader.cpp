@@ -1,3 +1,13 @@
+// Converts glTF meshes, transforms, and textures into the engine's runtime scene data.
+//
+// The loader intentionally targets the engine's "flat render object list" instead of
+// trying to preserve the full authoring model. That means:
+// - glTF nodes are traversed and their transforms are baked into RenderObject matrices.
+// - each primitive becomes one RenderObject with one Mesh + one Material.
+// - textures are cached during import so repeated materials share uploads.
+//
+// This keeps the submission and ray tracing code simple, at the cost of losing some
+// higher-level authoring structure that a larger engine might preserve.
 #include "Assets/GLTFLoader.h"
 
 #include <cstdint>
@@ -28,6 +38,7 @@
 
 namespace
 {
+    // Resolve paths relative to the configured asset root so examples can use repo paths.
     std::string ResolveAssetPath(const std::string& path)
     {
         const std::filesystem::path inputPath(path);
@@ -82,6 +93,8 @@ namespace
         std::size_t index
     )
     {
+        // glTF accessors can be tightly packed or interleaved. This helper hides that
+        // detail so the typed readers below can simply reinterpret the returned bytes.
         const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
         const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
         const std::size_t stride = accessor.ByteStride(bufferView) != 0
@@ -159,6 +172,7 @@ namespace
 
     void ComputeNormals(std::vector<Vertex>& vertices, const std::vector<std::uint32_t>& indices)
     {
+        // Generate smooth vertex normals when the source mesh omitted them.
         for (Vertex& vertex : vertices)
         {
             vertex.normal = glm::vec3(0.0f);
@@ -202,6 +216,8 @@ namespace
 
     void ComputeTangents(std::vector<Vertex>& vertices, const std::vector<std::uint32_t>& indices)
     {
+        // Tangents are required for normal mapping. When glTF does not provide them,
+        // derive them from triangle position/UV gradients.
         std::vector<glm::vec3> tangentAccum(vertices.size(), glm::vec3(0.0f));
         std::vector<glm::vec3> bitangentAccum(vertices.size(), glm::vec3(0.0f));
 
@@ -258,6 +274,7 @@ namespace
 
     glm::mat4 BuildNodeLocalMatrix(const tinygltf::Node& node)
     {
+        // glTF nodes may be authored either as a baked matrix or as TRS components.
         if (node.matrix.size() == 16)
         {
             glm::mat4 matrix(1.0f);
@@ -318,6 +335,7 @@ namespace
         std::unordered_map<std::uint64_t, std::shared_ptr<Texture2D>>& cache
     )
     {
+        // Cache per source image and color space so multiple materials share uploads.
         if (textureIndex < 0 || textureIndex >= static_cast<int>(model.textures.size()))
         {
             return nullptr;
@@ -393,6 +411,7 @@ namespace
         std::unordered_map<std::uint64_t, std::shared_ptr<ImageTexture>>& cache
     )
     {
+        // CPU copies of texture data are kept for the offline ray-traced reference path.
         if (textureIndex < 0 || textureIndex >= static_cast<int>(model.textures.size()))
         {
             return nullptr;
@@ -435,6 +454,12 @@ namespace
         std::unordered_map<std::uint64_t, std::shared_ptr<ImageTexture>>& imageTextureCache
     )
     {
+        // Map glTF PBR fields into the engine's compact material structure.
+        // The same Material instance is consumed by:
+        // - the realtime OpenGL path through MaterialBinder + pbr.frag
+        // - the CPU reference tracer through ImageTexture sampling
+        //
+        // That dual use is why we upload both GPU textures and CPU-side texture copies.
         Material material;
         if (materialIndex < 0 || materialIndex >= static_cast<int>(model.materials.size()))
         {
@@ -535,6 +560,9 @@ namespace
         std::unordered_map<std::uint64_t, std::shared_ptr<ImageTexture>>& imageTextureCache
     )
     {
+        // Each glTF primitive becomes its own RenderObject so submission is flat and simple.
+        // That flat representation is one of the main design choices of this sample engine:
+        // passes do not need to understand scene graphs, only draw items with baked matrices.
         const auto positionIt = primitive.attributes.find("POSITION");
         if (positionIt == primitive.attributes.end())
         {
@@ -629,6 +657,7 @@ namespace
         std::unordered_map<std::uint64_t, std::shared_ptr<ImageTexture>>& imageTextureCache
     )
     {
+        // Traverse the glTF scene graph depth-first and accumulate parent transforms.
         const tinygltf::Node& node = model.nodes[nodeIndex];
         const glm::mat4 worldTransform = parentTransform * BuildNodeLocalMatrix(node);
 
@@ -664,6 +693,13 @@ bool GLTFLoader::LoadModelIntoScene(
     std::string* errorMessage
 ) const
 {
+    // tinygltf handles both .gltf and .glb, but the engine only consumes a static subset.
+    //
+    // The import flow is:
+    // 1. tinygltf parses the container file
+    // 2. ProcessNode walks the chosen glTF scene graph
+    // 3. AppendPrimitive converts each primitive into Mesh/Material/Transform
+    // 4. the resulting RenderObjects are appended directly into Scene
     tinygltf::TinyGLTF loader;
     tinygltf::Model model;
     std::string warnings;

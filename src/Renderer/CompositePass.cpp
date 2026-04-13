@@ -1,3 +1,4 @@
+// Final fullscreen composite for tone mapping, debug output, and reference comparison.
 #include "Renderer/CompositePass.h"
 
 #include <glad/glad.h>
@@ -42,6 +43,7 @@ void CompositePass::Execute(
     const Mesh& fullscreenQuad
 )
 {
+    // The composite stage always writes to the default framebuffer.
     glDisable(GL_DEPTH_TEST);
     Framebuffer::Unbind();
     glClear(GL_COLOR_BUFFER_BIT);
@@ -60,6 +62,7 @@ void CompositePass::Execute(
     }
     else
     {
+        // Keep the shader branch-free by always binding a valid texture.
         sceneColor.Bind(2);
     }
     albedoColor.Bind(3);

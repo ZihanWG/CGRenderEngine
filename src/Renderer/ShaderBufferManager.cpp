@@ -1,8 +1,10 @@
+// Binds the engine's shared uniform buffers to fixed binding slots.
 #include "Renderer/ShaderBufferManager.h"
 
 void ShaderBufferManager::InitializeUniformBuffer(BufferBindingSlot slot, std::size_t size)
 {
     const std::size_t slotIndex = static_cast<std::size_t>(slot);
+    // Re-initialization is allowed and simply reallocates the slot to the new size.
     m_Buffers[slotIndex].Allocate(ShaderBufferKind::Uniform, size);
     m_Sizes[slotIndex] = size;
     m_Initialized[slotIndex] = true;

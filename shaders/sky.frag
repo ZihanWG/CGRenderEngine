@@ -1,4 +1,5 @@
 #version 330 core
+// Samples the environment map as background and populates the same MRT layout as the scene pass.
 
 layout (location = 0) out vec4 FragColor;
 layout (location = 1) out vec4 BrightColor;
@@ -24,6 +25,7 @@ const float PI = 3.14159265359;
 
 vec2 DirectionToLatLong(vec3 direction)
 {
+    // Keep sky/environment orientation consistent with the lighting shaders and CPU path.
     float rotationRadians = radians(uEnvironmentData.z);
     float cosRotation = cos(rotationRadians);
     float sinRotation = sin(rotationRadians);
@@ -39,6 +41,7 @@ vec2 DirectionToLatLong(vec3 direction)
 
 void main()
 {
+    // Reconstruct a world-space view ray from the fullscreen pixel and the inverse view-projection matrix.
     vec2 ndc = vTexCoord * 2.0 - 1.0;
     vec4 clipPosition = vec4(ndc, 1.0, 1.0);
     vec4 worldPosition = uInverseViewProjection * clipPosition;

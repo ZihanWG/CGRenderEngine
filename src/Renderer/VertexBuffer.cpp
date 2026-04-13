@@ -1,3 +1,4 @@
+// Legacy VBO helper retained for small standalone experiments.
 #include "Renderer/VertexBuffer.h"
 #include <glad/glad.h>
 

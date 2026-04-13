@@ -1,3 +1,4 @@
+// Shader program compilation/loading utilities for the OpenGL renderer.
 #include "Renderer/Shader.h"
 
 #include <glad/glad.h>
@@ -21,6 +22,7 @@ std::string Shader::ResolvePath(const std::string& path)
 
 std::string Shader::ReadFile(const std::string& path)
 {
+    // Keep shader paths asset-root relative so the executable can run from the build folder.
     const std::string resolvedPath = ResolvePath(path);
     std::ifstream file(resolvedPath);
     if (!file.is_open())
@@ -46,6 +48,7 @@ unsigned int Shader::CompileShader(unsigned int type, const std::string& source,
 
     if (!success)
     {
+        // Include the shader path in the exception so build/runtime failures are actionable.
         glGetShaderInfoLog(shader, 1024, nullptr, infoLog);
         throw std::runtime_error("Shader compile error in " + debugName + ": " + infoLog);
     }
@@ -55,6 +58,7 @@ unsigned int Shader::CompileShader(unsigned int type, const std::string& source,
 
 Shader::Shader(const std::string& vertexPath, const std::string& fragmentPath)
 {
+    // Compile individual stages first so errors report the original source file cleanly.
     std::string vertexCode = ReadFile(vertexPath);
     std::string fragmentCode = ReadFile(fragmentPath);
 
@@ -117,6 +121,7 @@ void Shader::SetUniformBlockBinding(const std::string& blockName, unsigned int b
     const unsigned int blockIndex = glGetUniformBlockIndex(m_ID, blockName.c_str());
     if (blockIndex == GL_INVALID_INDEX)
     {
+        // Allow shaders that do not consume a given block to share the same setup path.
         return;
     }
 

@@ -1,4 +1,5 @@
 #version 330 core
+// Forward PBR vertex stage. Computes world-space attributes once for the fragment shader.
 
 layout (location = 0) in vec3 aPosition;
 layout (location = 1) in vec3 aNormal;
@@ -38,6 +39,7 @@ void main()
 
     if (tangentLength > 1e-6 && abs(aTangent.w) > 0.5)
     {
+        // Preserve the authored tangent basis when available for normal-mapped materials.
         worldTangent = normalize(worldTangent - worldNormal * dot(worldNormal, worldTangent));
         vs_out.WorldTangent = worldTangent;
         vs_out.TangentSign = aTangent.w;

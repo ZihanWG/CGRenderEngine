@@ -1,3 +1,4 @@
+// Runtime toggles and scalars used by the renderer and the final composite stage.
 #pragma once
 
 enum class DebugViewMode

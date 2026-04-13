@@ -1,3 +1,4 @@
+// Final fullscreen pass that tone maps, debugs buffers, and optionally compares references.
 #pragma once
 
 #include <memory>

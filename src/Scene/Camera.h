@@ -1,3 +1,4 @@
+// Simple fly camera shared by the realtime renderer and CPU ray tracer.
 #pragma once
 
 #include <glm/glm.hpp>
@@ -29,6 +30,7 @@ public:
     glm::vec3 GetForward() const;
     glm::vec3 GetRight() const;
     glm::vec3 GetUp() const;
+    // Generate a world-space primary ray for normalized viewport coordinates.
     glm::vec3 GenerateRayDirection(float u, float v) const;
 
 private:
@@ -42,5 +44,6 @@ private:
     float m_YawDegrees = -90.0f;
     float m_PitchDegrees = 0.0f;
 
+    // Rebuilds the target vector from yaw/pitch after mouse look changes.
     void UpdateTarget();
 };

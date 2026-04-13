@@ -1,3 +1,4 @@
+// Central binding-point registry for the engine's shared shader buffers.
 #pragma once
 
 #include <array>
@@ -14,6 +15,7 @@ public:
     template <typename T>
     void UploadUniform(BufferBindingSlot slot, const T& data)
     {
+        // Resize on demand so callers do not need to pre-negotiate exact block sizes.
         const std::size_t slotIndex = static_cast<std::size_t>(slot);
         if (!m_Initialized[slotIndex] || sizeof(T) > m_Sizes[slotIndex])
         {

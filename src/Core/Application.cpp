@@ -1,3 +1,10 @@
+// Wires together the window, scene, camera, and renderer into a runnable app.
+//
+// Reading guide:
+// 1. Start with Application::Run to see the lifetime of one frame.
+// 2. Then read BuildDemoScene to understand what content is fed into the renderer.
+// 3. Finally read HandleInput to see which runtime switches affect RenderSettings
+//    and when the offline reference needs to be invalidated.
 #include "Core/Application.h"
 
 #include <exception>
@@ -12,6 +19,7 @@
 
 namespace
 {
+    // Scans the bundled environment folder and returns the first HDR file, if any.
     std::string FindFirstHdrEnvironment()
     {
         const std::filesystem::path environmentRoot =
@@ -62,6 +70,7 @@ Application::~Application() = default;
 
 void Application::Run()
 {
+    // Keep the render loop simple: poll input, update camera state, render, present.
     double lastTime = Window::GetTimeSeconds();
 
     while (!m_Window->ShouldClose())
@@ -93,6 +102,13 @@ void Application::Run()
 
 Scene Application::BuildDemoScene()
 {
+    // The demo scene intentionally mixes analytic primitives, emissive geometry,
+    // and a textured glTF asset so every major renderer path is exercised.
+    //
+    // This scene is also deliberately small enough that the CPU reference tracer
+    // can keep up in the background. If you later replace it with a larger glTF
+    // scene, the renderer architecture still works, but the async reference bake
+    // will become the first subsystem that needs more optimization.
     Scene scene;
 
     scene.GetDirectionalLight().direction = glm::vec3(-0.55f, -0.9f, -0.25f);
@@ -222,6 +238,9 @@ Scene Application::BuildDemoScene()
 
 void Application::HandleInput(float deltaTime)
 {
+    // Camera movement invalidates the offline reference because the viewpoint changed.
+    // Pure renderer toggles do not necessarily invalidate the scene itself, but they
+    // may change which passes run or how the final composite is produced.
     GLFWwindow* nativeWindow = m_Window->GetNativeHandle();
     bool referenceDirty = false;
 
@@ -415,6 +434,7 @@ void Application::PrintControls() const
 
 bool Application::ConsumeToggleKey(int key, bool& latch) const
 {
+    // Trigger once on the rising edge so held keys do not flip settings every frame.
     const bool isPressed = glfwGetKey(m_Window->GetNativeHandle(), key) == GLFW_PRESS;
     const bool triggered = isPressed && !latch;
     latch = isPressed;

@@ -1,3 +1,4 @@
+// Thin wrapper over OpenGL uniform/storage buffers with explicit lifetime management.
 #pragma once
 
 #include <cstddef>
@@ -27,7 +28,9 @@ public:
     ShaderBufferKind GetKind() const { return m_Kind; }
 
 private:
+    // Resolve the GL bind target from the buffer kind once all validation has passed.
     GLenum ResolveTarget() const;
+    // Lazily create the underlying GL object the first time it is used.
     void EnsureCreated();
 
     unsigned int m_ID = 0;

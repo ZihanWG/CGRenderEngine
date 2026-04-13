@@ -1,3 +1,4 @@
+// Legacy EBO helper retained for small standalone experiments.
 #include "Renderer/IndexBuffer.h"
 #include <glad/glad.h>
 
