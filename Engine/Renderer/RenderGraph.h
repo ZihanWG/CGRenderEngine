@@ -1,13 +1,22 @@
-// Minimal pass scheduler with named dependencies. Enough structure to make pass order explicit.
+// Minimal resource-aware render graph. Passes declare reads, writes, targets, and dependencies.
 //
-// This is intentionally not a full transient-resource render graph. Its value in this project
-// is that it makes pass dependency intent visible and easy to extend before adding a heavier
-// graph system later.
+// This is still intentionally lighter than a transient resource allocator, but it now models
+// what each pass consumes and produces so the submission pipeline is not just "call pass A/B/C".
 #pragma once
 
 #include <functional>
 #include <string>
 #include <vector>
+
+struct RenderPassDesc
+{
+    std::string name;
+    std::vector<std::string> reads;
+    std::vector<std::string> writes;
+    std::string target;
+    std::vector<std::string> dependencies;
+    std::function<void()> callback;
+};
 
 class RenderGraph
 {
@@ -16,18 +25,11 @@ public:
 
     // Remove all registered passes before building the next frame graph.
     void Clear();
-    // Adds a pass plus the names of passes that must execute before it.
-    void AddPass(std::string name, std::vector<std::string> dependencies, ExecuteCallback callback);
+    // Adds a pass plus the resources it reads/writes and the passes it depends on.
+    void AddPass(RenderPassDesc pass);
     // Executes passes once all declared dependencies have completed.
     void Execute() const;
 
 private:
-    struct PassNode
-    {
-        std::string name;
-        std::vector<std::string> dependencies;
-        ExecuteCallback callback;
-    };
-
-    std::vector<PassNode> m_Passes;
+    std::vector<RenderPassDesc> m_Passes;
 };

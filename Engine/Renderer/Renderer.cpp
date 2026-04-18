@@ -124,24 +124,76 @@ void Renderer::BuildRenderGraph()
     // not consume GPU outputs. It only shares the Scene + Camera inputs and can therefore
     // overlap conceptually with the realtime frame, even though its result is only visible
     // once the async job completes in a later frame.
-    m_RenderGraph.AddPass("shadow", {}, [&]() {
+    RenderPassDesc shadowPass;
+    shadowPass.name = "shadow";
+    shadowPass.reads = {"render_world", "render_submission"};
+    shadowPass.writes = {"shadow_map"};
+    shadowPass.target = "shadow_framebuffer";
+    shadowPass.callback = [&]() {
         m_ShadowPass.Execute(*m_FrameRenderWorld, *m_FrameSubmission, m_Settings.enableShadows);
-    });
-    m_RenderGraph.AddPass("scene", {"shadow"}, [&]() {
+    };
+    m_RenderGraph.AddPass(std::move(shadowPass));
+
+    RenderPassDesc scenePass;
+    scenePass.name = "scene";
+    scenePass.reads = {"render_world", "render_submission", "shadow_map"};
+    scenePass.writes = {
+        "scene_color",
+        "scene_bright",
+        "scene_albedo",
+        "scene_normal",
+        "scene_material",
+        "scene_depth"
+    };
+    scenePass.target = "scene_framebuffer";
+    scenePass.dependencies = {"shadow"};
+    scenePass.callback = [&]() {
         m_ScenePass.Execute(
             *m_FrameRenderWorld,
             *m_FrameSubmission,
             m_ShadowPass.GetShadowTexture(),
             m_Settings
         );
-    });
-    m_RenderGraph.AddPass("bloom", {"scene"}, [&]() {
+    };
+    m_RenderGraph.AddPass(std::move(scenePass));
+
+    RenderPassDesc bloomPass;
+    bloomPass.name = "bloom";
+    bloomPass.reads = {"scene_bright"};
+    bloomPass.writes = {"bloom_output"};
+    bloomPass.target = "bloom_pingpong";
+    bloomPass.dependencies = {"scene"};
+    bloomPass.callback = [&]() {
         m_BloomPass.Execute(m_ScenePass.GetBrightTexture(), *m_FullscreenQuad, m_Settings);
-    });
-    m_RenderGraph.AddPass("reference", {}, [&]() {
+    };
+    m_RenderGraph.AddPass(std::move(bloomPass));
+
+    RenderPassDesc referencePass;
+    referencePass.name = "reference";
+    referencePass.reads = {"scene_authoring", "camera"};
+    referencePass.writes = {"reference_color"};
+    referencePass.target = "reference_texture";
+    referencePass.callback = [&]() {
         UpdateReference(*m_FrameScene, *m_FrameCamera);
-    });
-    m_RenderGraph.AddPass("composite", {"scene", "bloom", "reference"}, [&]() {
+    };
+    m_RenderGraph.AddPass(std::move(referencePass));
+
+    RenderPassDesc compositePass;
+    compositePass.name = "composite";
+    compositePass.reads = {
+        "scene_color",
+        "bloom_output",
+        "reference_color",
+        "scene_albedo",
+        "scene_normal",
+        "scene_material",
+        "scene_depth",
+        "shadow_map"
+    };
+    compositePass.writes = {"present"};
+    compositePass.target = "swapchain_backbuffer";
+    compositePass.dependencies = {"scene", "bloom", "reference"};
+    compositePass.callback = [&]() {
         glViewport(0, 0, m_ViewportWidth, m_ViewportHeight);
         m_CompositePass.Execute(
             m_ScenePass.GetSceneColorTexture(),
@@ -156,7 +208,8 @@ void Renderer::BuildRenderGraph()
             *m_FullscreenQuad
         );
         glEnable(GL_DEPTH_TEST);
-    });
+    };
+    m_RenderGraph.AddPass(std::move(compositePass));
 }
 
 void Renderer::ExecuteRenderGraph()

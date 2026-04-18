@@ -110,6 +110,7 @@ Relevant files:
 
 - `Engine/Renderer/Renderer.cpp`
 - `Engine/Renderer/RenderGraph.h`
+- `Engine/Renderer/RenderGraph.cpp`
 
 Frame flow:
 
@@ -129,6 +130,14 @@ Current pass order:
 - `composite`
 
 `reference` is logically independent from the realtime passes because it works from `Scene + Camera`, not from GPU textures.
+
+`RenderGraph` is now resource-aware instead of only being an ordered callback list:
+
+- every pass declares `reads`
+- every pass declares `writes`
+- every pass declares a `target`
+- every pass declares explicit `dependencies`
+- execution validates duplicate pass names, missing dependencies, and read/write hazards against the declared resource flow
 
 ## 6. Main Realtime Pass
 
