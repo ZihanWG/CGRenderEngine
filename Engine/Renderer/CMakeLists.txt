@@ -1,0 +1,35 @@
+add_library(CGEngineRenderer STATIC
+    BloomPass.cpp
+    BloomPass.h
+    CompositePass.cpp
+    CompositePass.h
+    MaterialBinder.cpp
+    MaterialBinder.h
+    RayTracer.cpp
+    RayTracer.h
+    Renderer.cpp
+    Renderer.h
+    RenderGraph.cpp
+    RenderGraph.h
+    RenderSettings.h
+    RenderSubmission.cpp
+    RenderSubmission.h
+    RenderWorld.cpp
+    RenderWorld.h
+    ScenePass.cpp
+    ScenePass.h
+    ShadowPass.cpp
+    ShadowPass.h
+)
+add_library(CGEngine::Renderer ALIAS CGEngineRenderer)
+target_include_directories(CGEngineRenderer
+    PUBLIC
+        ${PROJECT_SOURCE_DIR}
+)
+target_link_libraries(CGEngineRenderer
+    PUBLIC
+        CGEngine::Assets
+        CGEngine::RHI
+        CGEngine::Scene
+        glm::glm
+)
