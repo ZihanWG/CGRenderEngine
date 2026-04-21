@@ -124,92 +124,121 @@ void Renderer::BuildRenderGraph()
     // not consume GPU outputs. It only shares the Scene + Camera inputs and can therefore
     // overlap conceptually with the realtime frame, even though its result is only visible
     // once the async job completes in a later frame.
-    RenderPassDesc shadowPass;
-    shadowPass.name = "shadow";
-    shadowPass.reads = {"render_world", "render_submission"};
-    shadowPass.writes = {"shadow_map"};
-    shadowPass.target = "shadow_framebuffer";
-    shadowPass.callback = [&]() {
-        m_ShadowPass.Execute(*m_FrameRenderWorld, *m_FrameSubmission, m_Settings.enableShadows);
-    };
-    m_RenderGraph.AddPass(std::move(shadowPass));
+    const RenderGraphResourceHandle renderWorldResource =
+        m_RenderGraph.ImportResource("render_world", RenderGraphResourceType::CPUData);
+    const RenderGraphResourceHandle renderSubmissionResource =
+        m_RenderGraph.ImportResource("render_submission", RenderGraphResourceType::CPUData);
+    const RenderGraphResourceHandle authoringSceneResource =
+        m_RenderGraph.ImportResource("scene_authoring", RenderGraphResourceType::CPUData);
+    const RenderGraphResourceHandle cameraResource =
+        m_RenderGraph.ImportResource("camera", RenderGraphResourceType::CPUData);
+    const RenderGraphResourceHandle swapchainBackbufferResource =
+        m_RenderGraph.ImportResource("swapchain_backbuffer", RenderGraphResourceType::Backbuffer);
 
-    RenderPassDesc scenePass;
-    scenePass.name = "scene";
-    scenePass.reads = {"render_world", "render_submission", "shadow_map"};
-    scenePass.writes = {
-        "scene_color",
-        "scene_bright",
-        "scene_albedo",
-        "scene_normal",
-        "scene_material",
-        "scene_depth"
-    };
-    scenePass.target = "scene_framebuffer";
-    scenePass.dependencies = {"shadow"};
-    scenePass.callback = [&]() {
-        m_ScenePass.Execute(
-            *m_FrameRenderWorld,
-            *m_FrameSubmission,
-            m_ShadowPass.GetShadowTexture(),
-            m_Settings
-        );
-    };
-    m_RenderGraph.AddPass(std::move(scenePass));
+    const RenderGraphResourceHandle shadowFramebufferResource =
+        m_RenderGraph.CreateResource("shadow_framebuffer", RenderGraphResourceType::Framebuffer);
+    const RenderGraphResourceHandle sceneFramebufferResource =
+        m_RenderGraph.CreateResource("scene_framebuffer", RenderGraphResourceType::Framebuffer);
+    const RenderGraphResourceHandle bloomPingPongResource =
+        m_RenderGraph.CreateResource("bloom_pingpong", RenderGraphResourceType::Framebuffer);
+    const RenderGraphResourceHandle referenceTextureResource =
+        m_RenderGraph.CreateResource("reference_texture", RenderGraphResourceType::Texture);
 
-    RenderPassDesc bloomPass;
-    bloomPass.name = "bloom";
-    bloomPass.reads = {"scene_bright"};
-    bloomPass.writes = {"bloom_output"};
-    bloomPass.target = "bloom_pingpong";
-    bloomPass.dependencies = {"scene"};
-    bloomPass.callback = [&]() {
-        m_BloomPass.Execute(m_ScenePass.GetBrightTexture(), *m_FullscreenQuad, m_Settings);
-    };
-    m_RenderGraph.AddPass(std::move(bloomPass));
+    const RenderGraphResourceHandle shadowMapResource =
+        m_RenderGraph.CreateResource("shadow_map", RenderGraphResourceType::Texture);
+    const RenderGraphResourceHandle sceneColorResource =
+        m_RenderGraph.CreateResource("scene_color", RenderGraphResourceType::Texture);
+    const RenderGraphResourceHandle sceneBrightResource =
+        m_RenderGraph.CreateResource("scene_bright", RenderGraphResourceType::Texture);
+    const RenderGraphResourceHandle sceneAlbedoResource =
+        m_RenderGraph.CreateResource("scene_albedo", RenderGraphResourceType::Texture);
+    const RenderGraphResourceHandle sceneNormalResource =
+        m_RenderGraph.CreateResource("scene_normal", RenderGraphResourceType::Texture);
+    const RenderGraphResourceHandle sceneMaterialResource =
+        m_RenderGraph.CreateResource("scene_material", RenderGraphResourceType::Texture);
+    const RenderGraphResourceHandle sceneDepthResource =
+        m_RenderGraph.CreateResource("scene_depth", RenderGraphResourceType::Texture);
+    const RenderGraphResourceHandle bloomOutputResource =
+        m_RenderGraph.CreateResource("bloom_output", RenderGraphResourceType::Texture);
+    const RenderGraphResourceHandle referenceColorResource =
+        m_RenderGraph.CreateResource("reference_color", RenderGraphResourceType::Texture);
 
-    RenderPassDesc referencePass;
-    referencePass.name = "reference";
-    referencePass.reads = {"scene_authoring", "camera"};
-    referencePass.writes = {"reference_color"};
-    referencePass.target = "reference_texture";
-    referencePass.callback = [&]() {
-        UpdateReference(*m_FrameScene, *m_FrameCamera);
-    };
-    m_RenderGraph.AddPass(std::move(referencePass));
+    m_RenderGraph.AddPass("shadow")
+        .Read({renderWorldResource, renderSubmissionResource})
+        .Write(shadowMapResource)
+        .Target(shadowFramebufferResource)
+        .Execute([&]() {
+            m_ShadowPass.Execute(*m_FrameRenderWorld, *m_FrameSubmission, m_Settings.enableShadows);
+        });
 
-    RenderPassDesc compositePass;
-    compositePass.name = "composite";
-    compositePass.reads = {
-        "scene_color",
-        "bloom_output",
-        "reference_color",
-        "scene_albedo",
-        "scene_normal",
-        "scene_material",
-        "scene_depth",
-        "shadow_map"
-    };
-    compositePass.writes = {"present"};
-    compositePass.target = "swapchain_backbuffer";
-    compositePass.dependencies = {"scene", "bloom", "reference"};
-    compositePass.callback = [&]() {
-        glViewport(0, 0, m_ViewportWidth, m_ViewportHeight);
-        m_CompositePass.Execute(
-            m_ScenePass.GetSceneColorTexture(),
-            m_BloomPass.ResolveOutputTexture(m_ScenePass.GetBrightTexture()),
-            m_HasReference ? &m_ReferenceTexture : nullptr,
-            m_ScenePass.GetAlbedoTexture(),
-            m_ScenePass.GetNormalTexture(),
-            m_ScenePass.GetMaterialTexture(),
-            m_ScenePass.GetDepthTexture(),
-            m_ShadowPass.GetShadowTexture(),
-            m_Settings,
-            *m_FullscreenQuad
-        );
-        glEnable(GL_DEPTH_TEST);
-    };
-    m_RenderGraph.AddPass(std::move(compositePass));
+    m_RenderGraph.AddPass("scene")
+        .Read({renderWorldResource, renderSubmissionResource, shadowMapResource})
+        .Write({
+            sceneColorResource,
+            sceneBrightResource,
+            sceneAlbedoResource,
+            sceneNormalResource,
+            sceneMaterialResource,
+            sceneDepthResource
+        })
+        .Target(sceneFramebufferResource)
+        .Execute([&]() {
+            m_ScenePass.Execute(
+                *m_FrameRenderWorld,
+                *m_FrameSubmission,
+                m_ShadowPass.GetShadowTexture(),
+                m_Settings
+            );
+        });
+
+    m_RenderGraph.AddPass("bloom")
+        .Read(sceneBrightResource)
+        .Write(bloomOutputResource)
+        .Target(bloomPingPongResource)
+        .Execute([&]() {
+            m_BloomPass.Execute(m_ScenePass.GetBrightTexture(), *m_FullscreenQuad, m_Settings);
+        });
+
+    m_RenderGraph.AddPass("reference")
+        .Type(RenderGraphPassType::CPU)
+        .Read({authoringSceneResource, cameraResource})
+        .Write(referenceColorResource)
+        .Target(referenceTextureResource)
+        .Execute([&]() {
+            UpdateReference(*m_FrameScene, *m_FrameCamera);
+        });
+
+    m_RenderGraph.AddPass("composite")
+        .Read({
+            sceneColorResource,
+            bloomOutputResource,
+            referenceColorResource,
+            sceneAlbedoResource,
+            sceneNormalResource,
+            sceneMaterialResource,
+            sceneDepthResource,
+            shadowMapResource
+        })
+        .Write(swapchainBackbufferResource)
+        .Target(swapchainBackbufferResource)
+        .Execute([&]() {
+            glViewport(0, 0, m_ViewportWidth, m_ViewportHeight);
+            m_CompositePass.Execute(
+                m_ScenePass.GetSceneColorTexture(),
+                m_BloomPass.ResolveOutputTexture(m_ScenePass.GetBrightTexture()),
+                m_HasReference ? &m_ReferenceTexture : nullptr,
+                m_ScenePass.GetAlbedoTexture(),
+                m_ScenePass.GetNormalTexture(),
+                m_ScenePass.GetMaterialTexture(),
+                m_ScenePass.GetDepthTexture(),
+                m_ShadowPass.GetShadowTexture(),
+                m_Settings,
+                *m_FullscreenQuad
+            );
+            glEnable(GL_DEPTH_TEST);
+        });
+
+    m_RenderGraph.Compile();
 }
 
 void Renderer::ExecuteRenderGraph()
