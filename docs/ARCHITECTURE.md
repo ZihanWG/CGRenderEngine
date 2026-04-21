@@ -117,7 +117,7 @@ Frame flow:
 1. `BeginFrame()` updates viewport-dependent renderer state
 2. `BuildRenderWorld()` rebuilds or reuses `RenderSubmission`
 3. `BuildRenderWorld()` computes the light-space matrix for the shadow pass
-4. `BuildRenderGraph()` schedules passes through `RenderGraph`
+4. `BuildRenderGraph()` declares passes and compiles a validated execution plan
 5. `ExecuteRenderGraph()` kicks or consumes the async CPU reference job
 6. `ExecuteRenderGraph()` composites to the swapchain framebuffer
 
@@ -133,11 +133,25 @@ Current pass order:
 
 `RenderGraph` is now resource-aware instead of only being an ordered callback list:
 
+- passes are registered as typed handles; pass names are debug labels, not dependency keys
+- passes carry an explicit type (`Graphics`, `Compute`, or `CPU`); the reference pass is modeled as a CPU pass
+- resources are registered as typed handles, not passed around as raw strings
+- imported resources model externally owned inputs such as `RenderWorld`, `RenderSubmission`, camera data, and the swapchain backbuffer
+- graph resources model produced textures/framebuffers such as shadow maps, scene MRT outputs, bloom output, and reference color
+- graph resources follow a single-producer/versioned-resource model; multiple writes to the same logical resource should be represented as separate resource versions
 - every pass declares `reads`
 - every pass declares `writes`
 - every pass declares a `target`
-- every pass declares explicit `dependencies`
-- execution validates duplicate pass names, missing dependencies, and read/write hazards against the declared resource flow
+- passes may declare explicit typed-handle `dependencies` for non-resource ordering constraints
+- passes are normally declared through the `RenderGraph::PassBuilder` chain: `AddPass(name).Type(...).Read(...).Write(...).Target(...).Execute(...)`
+- `Compile()` automatically derives producer/consumer dependencies from resource reads and writes
+- resource dependency compilation is based on producer/consumer sets, not on pass declaration order
+- `Compile()` validates duplicate pass names, invalid dependencies, missing execute callbacks, dependency cycles, and invalid resource use
+- `Compile()` also builds a resource lifetime table with first use, last use, read count, write count, and target count per resource
+- `Compile()` also builds resource transition metadata for producer/consumer edges, including source pass, destination pass, and read/write/target access types
+- `Compile()` also builds execution levels, grouping passes whose dependencies are satisfied at the same topology depth
+- compiled graph data is available through read-only accessors for passes, resources, execution order, execution levels, lifetimes, and transitions
+- `Execute()` only walks the compiled pass order; it no longer re-solves the graph at execution time
 
 ## 6. Main Realtime Pass
 
