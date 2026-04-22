@@ -144,6 +144,8 @@ void Renderer::BuildRenderGraph()
     const RenderGraphResourceHandle referenceTextureResource =
         m_RenderGraph.CreateResource("reference_texture", RenderGraphResourceType::Texture);
 
+    const RenderGraphResourceHandle referenceFrameResource =
+        m_RenderGraph.CreateResource("reference_frame", RenderGraphResourceType::CPUData);
     const RenderGraphResourceHandle shadowMapResource =
         m_RenderGraph.CreateResource("shadow_map", RenderGraphResourceType::Texture);
     const RenderGraphResourceHandle sceneColorResource =
@@ -199,13 +201,20 @@ void Renderer::BuildRenderGraph()
             m_BloomPass.Execute(m_ScenePass.GetBrightTexture(), *m_FullscreenQuad, m_Settings);
         });
 
-    m_RenderGraph.AddPass("reference")
+    m_RenderGraph.AddPass("reference_task")
         .Type(RenderGraphPassType::CPU)
         .Read({authoringSceneResource, cameraResource})
+        .Write(referenceFrameResource)
+        .Execute([&]() {
+            UpdateReferenceTask(*m_FrameScene, *m_FrameCamera);
+        });
+
+    m_RenderGraph.AddPass("reference_upload")
+        .Read(referenceFrameResource)
         .Write(referenceColorResource)
         .Target(referenceTextureResource)
         .Execute([&]() {
-            UpdateReference(*m_FrameScene, *m_FrameCamera);
+            UploadReferenceFrame();
         });
 
     m_RenderGraph.AddPass("composite")
@@ -274,6 +283,7 @@ void Renderer::InvalidateReference()
     ++m_ReferenceRevision;
     m_ReferenceDirty = true;
     m_HasReference = false;
+    m_PendingReferenceFrame.reset();
 }
 
 void Renderer::SetSettings(const RenderSettings& settings)
@@ -303,7 +313,7 @@ void Renderer::EnsureRenderTargets(int width, int height)
     InvalidateReference();
 }
 
-void Renderer::UpdateReference(const Scene& scene, const Camera& camera)
+void Renderer::UpdateReferenceTask(const Scene& scene, const Camera& camera)
 {
     using namespace std::chrono_literals;
 
@@ -319,16 +329,7 @@ void Renderer::UpdateReference(const Scene& scene, const Camera& camera)
 
         if (referenceFrame.revision == m_ReferenceRevision)
         {
-            m_ReferenceTexture.Allocate(
-                referenceFrame.settings.width,
-                referenceFrame.settings.height,
-                GL_RGB16F,
-                GL_RGB,
-                GL_FLOAT,
-                referenceFrame.pixels.data()
-            );
-            m_HasReference = true;
-            m_ReferenceDirty = false;
+            m_PendingReferenceFrame = std::move(referenceFrame);
         }
     }
 
@@ -362,6 +363,27 @@ void Renderer::UpdateReference(const Scene& scene, const Camera& camera)
             revision
         };
     });
+}
+
+void Renderer::UploadReferenceFrame()
+{
+    if (!m_PendingReferenceFrame)
+    {
+        return;
+    }
+
+    ReferenceFrame& referenceFrame = *m_PendingReferenceFrame;
+    m_ReferenceTexture.Allocate(
+        referenceFrame.settings.width,
+        referenceFrame.settings.height,
+        GL_RGB16F,
+        GL_RGB,
+        GL_FLOAT,
+        referenceFrame.pixels.data()
+    );
+    m_HasReference = true;
+    m_ReferenceDirty = false;
+    m_PendingReferenceFrame.reset();
 }
 
 void Renderer::ResetFrameState()

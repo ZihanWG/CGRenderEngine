@@ -28,6 +28,7 @@ target_include_directories(CGEngineRenderer
 )
 target_link_libraries(CGEngineRenderer
     PUBLIC
+        CGEngine::Core
         CGEngine::Assets
         CGEngine::RHI
         CGEngine::Scene

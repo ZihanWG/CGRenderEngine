@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <future>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -50,8 +51,10 @@ private:
 
     // Reallocates viewport-dependent render targets when the window changes size.
     void EnsureRenderTargets(int width, int height);
-    // Starts or consumes the asynchronous ray tracing task when needed.
-    void UpdateReference(const class Scene& scene, const class Camera& camera);
+    // Starts or consumes the asynchronous CPU ray tracing task when needed.
+    void UpdateReferenceTask(const class Scene& scene, const class Camera& camera);
+    // Uploads a completed CPU reference frame to the realtime comparison texture.
+    void UploadReferenceFrame();
     // Clear pointers and graph state carried only for the current frame.
     void ResetFrameState();
 
@@ -88,4 +91,5 @@ private:
 
     RayTraceSettings m_RayTraceSettings;
     std::future<ReferenceFrame> m_RayTraceFuture;
+    std::optional<ReferenceFrame> m_PendingReferenceFrame;
 };

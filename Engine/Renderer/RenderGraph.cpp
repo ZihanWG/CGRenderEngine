@@ -1,9 +1,11 @@
 // Executes render passes once their named dependencies have been satisfied.
+#include "Engine/Core/JobSystem.h"
 #include "Engine/Renderer/RenderGraph.h"
 
 #include <algorithm>
 #include <cstdint>
 #include <functional>
+#include <future>
 #include <string>
 #include <stdexcept>
 #include <unordered_map>
@@ -44,15 +46,6 @@ namespace
         }
 
         return resources[handle.id];
-    }
-
-    const std::string& GetResourceName(
-        const std::vector<RenderGraphResourceDesc>& resources,
-        RenderGraphResourceHandle handle,
-        const std::string& context
-    )
-    {
-        return GetResourceDesc(resources, handle, context).name;
     }
 
     void AddDependency(
@@ -250,7 +243,24 @@ namespace
         return executionLevels;
     }
 
-    std::vector<RenderGraphPassHandle> FlattenExecutionLevels(
+    void AppendPassesOfType(
+        const std::vector<RenderPassDesc>& passes,
+        const std::vector<RenderGraphPassHandle>& level,
+        RenderGraphPassType passType,
+        std::vector<RenderGraphPassHandle>& executionOrder
+    )
+    {
+        for (const RenderGraphPassHandle passHandle : level)
+        {
+            if (passes[passHandle.id].passType == passType)
+            {
+                executionOrder.push_back(passHandle);
+            }
+        }
+    }
+
+    std::vector<RenderGraphPassHandle> BuildExecutionOrderFromLevels(
+        const std::vector<RenderPassDesc>& passes,
         const std::vector<std::vector<RenderGraphPassHandle>>& executionLevels
     )
     {
@@ -264,7 +274,9 @@ namespace
         executionOrder.reserve(passCount);
         for (const std::vector<RenderGraphPassHandle>& level : executionLevels)
         {
-            executionOrder.insert(executionOrder.end(), level.begin(), level.end());
+            AppendPassesOfType(passes, level, RenderGraphPassType::CPU, executionOrder);
+            AppendPassesOfType(passes, level, RenderGraphPassType::Compute, executionOrder);
+            AppendPassesOfType(passes, level, RenderGraphPassType::Graphics, executionOrder);
         }
 
         return executionOrder;
@@ -281,15 +293,22 @@ namespace
         {
             const RenderPassDesc& pass = passes[passIndex];
 
-            if (!pass.writes.empty() && !pass.target.IsValid())
-            {
-                throw std::runtime_error(
-                    "RenderGraph pass '" + pass.name + "' writes resources but has no target."
-                );
-            }
             if (pass.target.IsValid())
             {
-                GetResourceDesc(resources, pass.target, "pass target");
+                const RenderGraphResourceDesc& targetDesc = GetResourceDesc(resources, pass.target, "pass target");
+                if (pass.passType == RenderGraphPassType::CPU)
+                {
+                    throw std::runtime_error("RenderGraph CPU pass '" + pass.name + "' cannot declare a target.");
+                }
+                if (targetDesc.type == RenderGraphResourceType::CPUData ||
+                    targetDesc.type == RenderGraphResourceType::Buffer)
+                {
+                    throw std::runtime_error(
+                        "RenderGraph pass '" + pass.name + "' uses non-renderable resource '" +
+                        targetDesc.name + "' as a target."
+                    );
+                }
+
                 AddResourceProducer(
                     resourceUses[pass.target.id],
                     passIndex,
@@ -299,13 +318,31 @@ namespace
 
             for (const RenderGraphResourceHandle resource : pass.reads)
             {
-                GetResourceDesc(resources, resource, "pass read");
+                const RenderGraphResourceDesc& resourceDesc = GetResourceDesc(resources, resource, "pass read");
+                if (pass.passType == RenderGraphPassType::CPU &&
+                    resourceDesc.type != RenderGraphResourceType::CPUData)
+                {
+                    throw std::runtime_error(
+                        "RenderGraph CPU pass '" + pass.name + "' cannot read non-CPU resource '" +
+                        resourceDesc.name + "'."
+                    );
+                }
+
                 resourceUses[resource.id].readers.push_back(passIndex);
             }
 
             for (const RenderGraphResourceHandle resource : pass.writes)
             {
-                GetResourceName(resources, resource, "pass write");
+                const RenderGraphResourceDesc& resourceDesc = GetResourceDesc(resources, resource, "pass write");
+                if (pass.passType == RenderGraphPassType::CPU &&
+                    resourceDesc.type != RenderGraphResourceType::CPUData)
+                {
+                    throw std::runtime_error(
+                        "RenderGraph CPU pass '" + pass.name + "' cannot write non-CPU resource '" +
+                        resourceDesc.name + "'."
+                    );
+                }
+
                 AddResourceProducer(
                     resourceUses[resource.id],
                     passIndex,
@@ -611,7 +648,7 @@ void RenderGraph::Compile()
     m_ResourceTransitions.clear();
     AddResourceDependencies(m_Passes, m_Resources, m_CompiledDependencies, m_ResourceTransitions);
     m_ExecutionLevels = BuildExecutionLevels(m_Passes, m_CompiledDependencies);
-    m_ExecutionOrder = FlattenExecutionLevels(m_ExecutionLevels);
+    m_ExecutionOrder = BuildExecutionOrderFromLevels(m_Passes, m_ExecutionLevels);
     m_ResourceLifetimes = BuildResourceLifetimes(m_Passes, m_Resources, m_ExecutionOrder);
     m_Compiled = true;
 }
@@ -623,12 +660,43 @@ void RenderGraph::Execute() const
         throw std::runtime_error("RenderGraph::Execute requires Compile to run first.");
     }
 
-    for (const RenderGraphPassHandle passHandle : m_ExecutionOrder)
+    for (const std::vector<RenderGraphPassHandle>& level : m_ExecutionLevels)
     {
-        const RenderPassDesc& pass = GetPass(passHandle);
-        if (pass.callback)
+        std::vector<std::future<void>> cpuFutures;
+        cpuFutures.reserve(level.size());
+
+        for (const RenderGraphPassHandle passHandle : level)
         {
-            pass.callback();
+            const RenderPassDesc& pass = GetPass(passHandle);
+            if (pass.passType == RenderGraphPassType::CPU)
+            {
+                cpuFutures.push_back(JobSystem::Get().Submit([callback = pass.callback]() {
+                    callback();
+                }));
+            }
+        }
+
+        for (const RenderGraphPassHandle passHandle : level)
+        {
+            const RenderPassDesc& pass = GetPass(passHandle);
+            if (pass.passType == RenderGraphPassType::Compute)
+            {
+                pass.callback();
+            }
+        }
+
+        for (const RenderGraphPassHandle passHandle : level)
+        {
+            const RenderPassDesc& pass = GetPass(passHandle);
+            if (pass.passType == RenderGraphPassType::Graphics)
+            {
+                pass.callback();
+            }
+        }
+
+        for (std::future<void>& future : cpuFutures)
+        {
+            future.get();
         }
     }
 }
