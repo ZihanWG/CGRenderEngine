@@ -137,7 +137,8 @@ public:
     PassBuilder AddPass(std::string name);
     // Validates the graph and builds a stable execution order for this frame.
     void Compile();
-    // Executes the already-compiled pass order.
+    // Executes the already-compiled execution levels. CPU passes are submitted to JobSystem;
+    // graphics/compute passes remain on the calling thread for API context ownership.
     void Execute() const;
     bool IsCompiled() const { return m_Compiled; }
     const std::vector<RenderPassDesc>& GetPasses() const { return m_Passes; }
