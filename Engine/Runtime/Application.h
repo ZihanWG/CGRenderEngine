@@ -4,6 +4,7 @@
 #include <array>
 #include <future>
 #include <memory>
+#include <string>
 
 #include "Engine/Assets/ResourceManager.h"
 #include "Engine/Platform/Window.h"
@@ -13,10 +14,15 @@
 
 struct DecodedSceneModel;
 
+struct ApplicationOptions
+{
+    bool editorMode = false;
+};
+
 class Application
 {
 public:
-    Application(int width, int height, const char* title);
+    Application(int width, int height, const char* title, ApplicationOptions options = {});
     ~Application();
 
     void Run();
@@ -40,6 +46,9 @@ private:
     void PumpAsyncLoads();
     // Applies camera motion and renderer hotkeys once per frame.
     void HandleInput(float deltaTime);
+    // Applies minimal keyboard-driven scene editing in the editor executable.
+    void HandleEditorInput(float deltaTime);
+    void UpdateEditorTitle();
     // Prints the runtime controls once at startup.
     void PrintControls() const;
     // Converts "pressed this frame" behavior into a latched toggle key.
@@ -50,6 +59,9 @@ private:
     std::unique_ptr<Renderer> m_Renderer;
     std::unique_ptr<Camera> m_Camera;
     Scene m_Scene;
+    ApplicationOptions m_Options;
+    std::string m_BaseWindowTitle;
+    std::size_t m_SelectedObjectIndex = 0;
     std::shared_future<std::shared_ptr<EnvironmentImage>> m_PendingEnvironmentLoad;
     std::string m_PendingEnvironmentPath;
     std::shared_future<std::shared_ptr<DecodedSceneModel>> m_PendingModelLoad;
@@ -64,7 +76,9 @@ private:
     bool m_BloomToggleLatch = false;
     bool m_ShadowToggleLatch = false;
     bool m_IBLToggleLatch = false;
+    bool m_FxaaToggleLatch = false;
     bool m_ReferenceToggleLatch = false;
     bool m_RebakeLatch = false;
+    bool m_EditorSelectLatch = false;
     std::array<bool, 8> m_DebugViewLatches{};
 };

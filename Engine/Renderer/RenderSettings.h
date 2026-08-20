@@ -18,6 +18,7 @@ struct RenderSettings
     bool enableShadows = true;
     bool enableBloom = true;
     bool enableIBL = true;
+    bool enableFxaa = true;
     bool enableReferenceComparison = true;
     float exposure = 1.05f;
     float environmentIntensity = 0.85f;

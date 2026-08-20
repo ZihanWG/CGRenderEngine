@@ -9,6 +9,7 @@
 #include <string>
 #include <stdexcept>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 namespace
@@ -167,6 +168,54 @@ namespace
             if (!pass.callback)
             {
                 throw std::runtime_error("RenderGraph pass '" + pass.name + "' has no execute callback.");
+            }
+        }
+    }
+
+    void ValidatePassResourceDeclarations(const std::vector<RenderPassDesc>& passes)
+    {
+        for (const RenderPassDesc& pass : passes)
+        {
+            const auto validateUnique = [&](const std::vector<RenderGraphResourceHandle>& handles, const char* usage) {
+                std::unordered_set<std::uint32_t> seen;
+                for (const RenderGraphResourceHandle handle : handles)
+                {
+                    if (handle.IsValid() && !seen.insert(handle.id).second)
+                    {
+                        throw std::runtime_error(
+                            "RenderGraph pass '" + pass.name + "' declares the same resource more than once as " + usage + "."
+                        );
+                    }
+                }
+            };
+
+            validateUnique(pass.reads, "a read");
+            validateUnique(pass.writes, "a write");
+
+            std::unordered_set<std::uint32_t> reads;
+            for (const RenderGraphResourceHandle handle : pass.reads)
+            {
+                if (handle.IsValid())
+                {
+                    reads.insert(handle.id);
+                }
+            }
+            for (const RenderGraphResourceHandle handle : pass.writes)
+            {
+                if (handle.IsValid() && reads.find(handle.id) != reads.end())
+                {
+                    throw std::runtime_error(
+                        "RenderGraph pass '" + pass.name +
+                        "' reads and writes the same resource. Create an explicit resource version instead."
+                    );
+                }
+            }
+            if (pass.target.IsValid() && reads.find(pass.target.id) != reads.end())
+            {
+                throw std::runtime_error(
+                    "RenderGraph pass '" + pass.name +
+                    "' reads its render target. Use separate input and output resource versions."
+                );
             }
         }
     }
@@ -641,9 +690,15 @@ const RenderGraphResourceDesc& RenderGraph::GetResource(RenderGraphResourceHandl
 
 void RenderGraph::Compile()
 {
+    if (m_Compiled)
+    {
+        return;
+    }
+
     ValidatePassNames(m_Passes);
     ValidatePassDependencies(m_Passes);
     ValidatePassCallbacks(m_Passes);
+    ValidatePassResourceDeclarations(m_Passes);
     m_CompiledDependencies = BuildExplicitDependencies(m_Passes);
     m_ResourceTransitions.clear();
     AddResourceDependencies(m_Passes, m_Resources, m_CompiledDependencies, m_ResourceTransitions);
@@ -651,6 +706,7 @@ void RenderGraph::Compile()
     m_ExecutionOrder = BuildExecutionOrderFromLevels(m_Passes, m_ExecutionLevels);
     m_ResourceLifetimes = BuildResourceLifetimes(m_Passes, m_Resources, m_ExecutionOrder);
     m_Compiled = true;
+    ++m_CompileCount;
 }
 
 void RenderGraph::Execute() const

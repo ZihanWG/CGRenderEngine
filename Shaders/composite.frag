@@ -17,6 +17,8 @@ uniform float uExposure;
 uniform float uSplitPosition;
 uniform int uHasReference;
 uniform int uDebugView;
+uniform int uEnableFxaa;
+uniform vec2 uInverseResolution;
 
 vec3 ToneMap(vec3 color)
 {
@@ -40,6 +42,55 @@ float LinearizeDepth(float depth)
     const float farPlane = 40.0;
     float z = depth * 2.0 - 1.0;
     return (2.0 * nearPlane * farPlane) / (farPlane + nearPlane - z * (farPlane - nearPlane));
+}
+
+float Luma(vec3 color)
+{
+    return dot(color, vec3(0.299, 0.587, 0.114));
+}
+
+vec3 SampleRealtime(vec2 uv)
+{
+    return ToneMap(texture(uSceneColor, uv).rgb + texture(uBloomColor, uv).rgb);
+}
+
+vec3 ApplyFxaa(vec2 uv)
+{
+    vec3 rgbM = SampleRealtime(uv);
+    vec3 rgbNW = SampleRealtime(uv + vec2(-1.0, -1.0) * uInverseResolution);
+    vec3 rgbNE = SampleRealtime(uv + vec2( 1.0, -1.0) * uInverseResolution);
+    vec3 rgbSW = SampleRealtime(uv + vec2(-1.0,  1.0) * uInverseResolution);
+    vec3 rgbSE = SampleRealtime(uv + vec2( 1.0,  1.0) * uInverseResolution);
+
+    float lumaM = Luma(rgbM);
+    float lumaNW = Luma(rgbNW);
+    float lumaNE = Luma(rgbNE);
+    float lumaSW = Luma(rgbSW);
+    float lumaSE = Luma(rgbSE);
+    float lumaMin = min(lumaM, min(min(lumaNW, lumaNE), min(lumaSW, lumaSE)));
+    float lumaMax = max(lumaM, max(max(lumaNW, lumaNE), max(lumaSW, lumaSE)));
+    if (lumaMax - lumaMin < max(0.0312, lumaMax * 0.125))
+    {
+        return rgbM;
+    }
+
+    vec2 direction;
+    direction.x = -((lumaNW + lumaNE) - (lumaSW + lumaSE));
+    direction.y =  ((lumaNW + lumaSW) - (lumaNE + lumaSE));
+    float directionReduce = max((lumaNW + lumaNE + lumaSW + lumaSE) * 0.03125, 0.0078125);
+    float inverseDirectionMin = 1.0 / (min(abs(direction.x), abs(direction.y)) + directionReduce);
+    direction = clamp(direction * inverseDirectionMin, vec2(-8.0), vec2(8.0)) * uInverseResolution;
+
+    vec3 rgbA = 0.5 * (
+        SampleRealtime(uv + direction * (1.0 / 3.0 - 0.5)) +
+        SampleRealtime(uv + direction * (2.0 / 3.0 - 0.5))
+    );
+    vec3 rgbB = rgbA * 0.5 + 0.25 * (
+        SampleRealtime(uv + direction * -0.5) +
+        SampleRealtime(uv + direction * 0.5)
+    );
+    float lumaB = Luma(rgbB);
+    return (lumaB < lumaMin || lumaB > lumaMax) ? rgbA : rgbB;
 }
 
 void main()
@@ -97,7 +148,7 @@ void main()
         return;
     }
 
-    realtimeColor = ToneMap(realtimeColor);
+    realtimeColor = uEnableFxaa == 1 ? ApplyFxaa(vTexCoord) : ToneMap(realtimeColor);
     referenceColor = ToneMap(referenceColor);
 
     float vignette = Vignette(vTexCoord);

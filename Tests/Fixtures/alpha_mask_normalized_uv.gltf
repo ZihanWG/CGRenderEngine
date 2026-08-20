@@ -1,0 +1,40 @@
+{
+  "asset": { "version": "2.0" },
+  "scene": 0,
+  "scenes": [{ "nodes": [0] }],
+  "nodes": [{ "name": "MaskedTriangle", "mesh": 0 }],
+  "meshes": [{
+    "primitives": [{
+      "attributes": { "POSITION": 0, "TEXCOORD_0": 1 },
+      "indices": 2,
+      "material": 0,
+      "mode": 4
+    }]
+  }],
+  "materials": [{
+    "name": "Leaves",
+    "alphaMode": "MASK",
+    "alphaCutoff": 0.25,
+    "doubleSided": true,
+    "pbrMetallicRoughness": {
+      "baseColorFactor": [1.0, 1.0, 1.0, 0.8],
+      "metallicFactor": 0.0,
+      "roughnessFactor": 0.9
+    }
+  }],
+  "buffers": [{
+    "byteLength": 56,
+    "uri": "data:application/octet-stream;base64,AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAP//AAAAAP//AAABAAIAAAA="
+  }],
+  "bufferViews": [
+    { "buffer": 0, "byteOffset": 0, "byteLength": 36, "target": 34962 },
+    { "buffer": 0, "byteOffset": 36, "byteLength": 12, "target": 34962 },
+    { "buffer": 0, "byteOffset": 48, "byteLength": 6, "target": 34963 }
+  ],
+  "accessors": [
+    { "bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0, 0, 0], "max": [1, 1, 0] },
+    { "bufferView": 1, "componentType": 5123, "normalized": true, "count": 3, "type": "VEC2" },
+    { "bufferView": 2, "componentType": 5123, "count": 3, "type": "SCALAR" }
+  ]
+}
+

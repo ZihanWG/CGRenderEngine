@@ -306,7 +306,8 @@ void main()
     float ambientOcclusion = SampleAmbientOcclusion();
     vec3 emissive = SampleEmissive();
 
-    if (materialOpacity <= 0.001)
+    float alphaCutoff = uMaterialParams1.z;
+    if (materialOpacity < max(alphaCutoff, 0.001))
     {
         discard;
     }

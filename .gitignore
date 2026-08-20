@@ -1,0 +1,32 @@
+# CMake and compiler output
+/build/
+/out/
+/cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+*.vcxproj*
+*.sln
+*.obj
+*.o
+*.lib
+*.a
+*.dll
+*.so
+*.dylib
+*.exe
+*.pdb
+
+# IDE and editor state
+/.idea/
+/.vs/
+/.vscode/
+*.user
+*.suo
+
+# Operating-system noise
+.DS_Store
+Thumbs.db
+

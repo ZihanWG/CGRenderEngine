@@ -36,6 +36,7 @@ namespace
                left.normalScale == right.normalScale &&
                left.occlusionStrength == right.occlusionStrength &&
                left.opacity == right.opacity &&
+               left.alphaCutoff == right.alphaCutoff &&
                left.blendMode == right.blendMode &&
                left.cullMode == right.cullMode &&
                left.castShadows == right.castShadows &&
@@ -159,11 +160,13 @@ void RenderQueue::BuildBatches(
             allowInstancing &&
             batches.back().meshStateId == command.meshStateId &&
             batches.back().renderStateId == command.renderStateId &&
-            (shadowOnly || (
+            ((!shadowOnly ||
+              (batches.back().material && batches.back().material->alphaCutoff > 0.0f) ||
+              (command.material && command.material->alphaCutoff > 0.0f)) ? (
                 batches.back().material &&
                 command.material &&
                 AreMaterialsBatchCompatible(*batches.back().material, *command.material)
-            ));
+            ) : true);
 
         if (!canExtendBatch)
         {
