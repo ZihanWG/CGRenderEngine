@@ -13,6 +13,7 @@ public:
     void PollEvents();
     void SwapBuffers();
     void RequestClose();
+    void SetTitle(const char* title);
 
     int GetWidth() const { return m_Width; }
     int GetHeight() const { return m_Height; }

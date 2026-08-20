@@ -141,6 +141,7 @@ public:
     // graphics/compute passes remain on the calling thread for API context ownership.
     void Execute() const;
     bool IsCompiled() const { return m_Compiled; }
+    std::size_t GetCompileCount() const { return m_CompileCount; }
     const std::vector<RenderPassDesc>& GetPasses() const { return m_Passes; }
     const std::vector<RenderGraphResourceDesc>& GetResources() const { return m_Resources; }
     const std::vector<RenderGraphPassHandle>& GetExecutionOrder() const { return m_ExecutionOrder; }
@@ -176,4 +177,5 @@ private:
     std::vector<RenderGraphResourceLifetime> m_ResourceLifetimes;
     std::vector<RenderGraphResourceTransition> m_ResourceTransitions;
     bool m_Compiled = false;
+    std::size_t m_CompileCount = 0;
 };

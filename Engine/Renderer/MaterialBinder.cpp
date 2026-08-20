@@ -83,7 +83,12 @@ void MaterialBinder::Bind(const Material& material) const
         material.ao,
         material.normalScale
     );
-    materialData.params1 = glm::vec4(material.occlusionStrength, material.opacity, 0.0f, 0.0f);
+    materialData.params1 = glm::vec4(
+        material.occlusionStrength,
+        material.opacity,
+        material.alphaCutoff,
+        0.0f
+    );
     materialData.textureFlags0 = glm::vec4(
         material.baseColorTexture ? 1.0f : 0.0f,
         material.metallicRoughnessTexture ? 1.0f : 0.0f,

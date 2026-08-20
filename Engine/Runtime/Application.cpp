@@ -48,7 +48,8 @@ namespace
     }
 }
 
-Application::Application(int width, int height, const char* title)
+Application::Application(int width, int height, const char* title, ApplicationOptions options)
+    : m_Options(options), m_BaseWindowTitle(title)
 {
     m_Window = std::make_unique<Window>(width, height, title);
     m_Camera = std::make_unique<Camera>(
@@ -65,6 +66,7 @@ Application::Application(int width, int height, const char* title)
     m_Renderer = std::make_unique<Renderer>(m_ResourceManager);
     m_Renderer->Initialize(m_Window->GetWidth(), m_Window->GetHeight());
     m_LastFrameTime = Window::GetTimeSeconds();
+    UpdateEditorTitle();
     PrintControls();
 }
 
@@ -413,6 +415,13 @@ void Application::HandleInput(float deltaTime)
         std::cout << "[Render] IBL " << (settings.enableIBL ? "On" : "Off") << std::endl;
     }
 
+    if (ConsumeToggleKey(GLFW_KEY_F, m_FxaaToggleLatch))
+    {
+        settings.enableFxaa = !settings.enableFxaa;
+        settingsChanged = true;
+        std::cout << "[Render] FXAA " << (settings.enableFxaa ? "On" : "Off") << std::endl;
+    }
+
     if (ConsumeToggleKey(GLFW_KEY_C, m_ReferenceToggleLatch))
     {
         settings.enableReferenceComparison = !settings.enableReferenceComparison;
@@ -479,6 +488,77 @@ void Application::HandleInput(float deltaTime)
     {
         m_Renderer->InvalidateReference();
     }
+
+    HandleEditorInput(deltaTime);
+}
+
+void Application::HandleEditorInput(float deltaTime)
+{
+    if (!m_Options.editorMode)
+    {
+        return;
+    }
+
+    const auto& readOnlyObjects = static_cast<const Scene&>(m_Scene).GetObjects();
+    if (readOnlyObjects.empty())
+    {
+        return;
+    }
+
+    if (ConsumeToggleKey(GLFW_KEY_TAB, m_EditorSelectLatch))
+    {
+        m_SelectedObjectIndex = (m_SelectedObjectIndex + 1) % readOnlyObjects.size();
+        UpdateEditorTitle();
+        std::cout << "[Editor] Selected " << readOnlyObjects[m_SelectedObjectIndex].name << std::endl;
+    }
+
+    GLFWwindow* nativeWindow = m_Window->GetNativeHandle();
+    const float editSpeed = glfwGetKey(nativeWindow, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ? 4.0f : 1.5f;
+    const float amount = editSpeed * deltaTime;
+    glm::vec3 translation(0.0f);
+    if (glfwGetKey(nativeWindow, GLFW_KEY_LEFT) == GLFW_PRESS) translation.x -= amount;
+    if (glfwGetKey(nativeWindow, GLFW_KEY_RIGHT) == GLFW_PRESS) translation.x += amount;
+    if (glfwGetKey(nativeWindow, GLFW_KEY_UP) == GLFW_PRESS) translation.z -= amount;
+    if (glfwGetKey(nativeWindow, GLFW_KEY_DOWN) == GLFW_PRESS) translation.z += amount;
+    if (glfwGetKey(nativeWindow, GLFW_KEY_PAGE_UP) == GLFW_PRESS) translation.y += amount;
+    if (glfwGetKey(nativeWindow, GLFW_KEY_PAGE_DOWN) == GLFW_PRESS) translation.y -= amount;
+
+    const float materialAmount = deltaTime * 0.5f;
+    const float roughnessDelta =
+        (glfwGetKey(nativeWindow, GLFW_KEY_K) == GLFW_PRESS ? materialAmount : 0.0f) -
+        (glfwGetKey(nativeWindow, GLFW_KEY_J) == GLFW_PRESS ? materialAmount : 0.0f);
+    const float metallicDelta =
+        (glfwGetKey(nativeWindow, GLFW_KEY_I) == GLFW_PRESS ? materialAmount : 0.0f) -
+        (glfwGetKey(nativeWindow, GLFW_KEY_U) == GLFW_PRESS ? materialAmount : 0.0f);
+
+    if (translation == glm::vec3(0.0f) && roughnessDelta == 0.0f && metallicDelta == 0.0f)
+    {
+        return;
+    }
+
+    std::vector<RenderObject>& objects = m_Scene.GetObjects();
+    m_SelectedObjectIndex %= objects.size();
+    RenderObject& selected = objects[m_SelectedObjectIndex];
+    selected.transform.position += translation;
+    Material& material = selected.ResolveMutableMaterial();
+    material.roughness = glm::clamp(material.roughness + roughnessDelta, 0.05f, 1.0f);
+    material.metallic = glm::clamp(material.metallic + metallicDelta, 0.0f, 1.0f);
+    m_Renderer->InvalidateReference();
+}
+
+void Application::UpdateEditorTitle()
+{
+    if (!m_Options.editorMode || !m_Window)
+    {
+        return;
+    }
+
+    const auto& objects = static_cast<const Scene&>(m_Scene).GetObjects();
+    const std::string selectedName = objects.empty()
+        ? "No selection"
+        : objects[m_SelectedObjectIndex % objects.size()].name;
+    const std::string title = m_BaseWindowTitle + " - Selected: " + selectedName;
+    m_Window->SetTitle(title.c_str());
 }
 
 void Application::PrintControls() const
@@ -491,12 +571,23 @@ void Application::PrintControls() const
         << "  B: toggle bloom\n"
         << "  N: toggle shadows\n"
         << "  M: toggle IBL\n"
+        << "  F: toggle FXAA\n"
         << "  C: toggle realtime/reference split compare\n"
         << "  R: rebake ray-traced reference\n"
         << "  1-8: switch final / scene / bright / albedo / normal / material / depth / shadow views\n"
         << "  +/-: adjust exposure\n"
         << "  [ / ]: adjust split position\n"
         << "  Esc: quit\n";
+
+    if (m_Options.editorMode)
+    {
+        std::cout
+            << "Editor controls:\n"
+            << "  Tab: select next object\n"
+            << "  Arrow keys / Page Up / Page Down: move selected object\n"
+            << "  J/K: decrease/increase roughness\n"
+            << "  U/I: decrease/increase metallic\n";
+    }
 }
 
 bool Application::ConsumeToggleKey(int key, bool& latch) const

@@ -39,7 +39,7 @@ struct alignas(16) LightingUniformData
 struct alignas(16) MaterialUniformData
 {
     // params0 = (metallic, roughness, ao, normalScale).
-    // params1 = (occlusionStrength, opacity, reserved...).
+    // params1 = (occlusionStrength, opacity, alphaCutoff, reserved).
     glm::vec4 albedo{1.0f, 1.0f, 1.0f, 1.0f};
     glm::vec4 emissive{0.0f, 0.0f, 0.0f, 1.0f};
     glm::vec4 params0{0.0f, 0.5f, 1.0f, 1.0f};

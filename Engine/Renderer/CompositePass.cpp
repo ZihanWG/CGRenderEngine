@@ -1,6 +1,8 @@
 // Final fullscreen composite for tone mapping, debug output, and reference comparison.
 #include "Engine/Renderer/CompositePass.h"
 
+#include <algorithm>
+
 #include <glad/glad.h>
 
 #include "Engine/Assets/ResourceManager.h"
@@ -53,6 +55,14 @@ void CompositePass::Execute(
     m_Shader->SetFloat("uSplitPosition", settings.splitPosition);
     m_Shader->SetInt("uHasReference", referenceColor && settings.enableReferenceComparison ? 1 : 0);
     m_Shader->SetInt("uDebugView", static_cast<int>(settings.debugView));
+    m_Shader->SetInt("uEnableFxaa", settings.enableFxaa ? 1 : 0);
+    m_Shader->SetVec2(
+        "uInverseResolution",
+        glm::vec2(
+            1.0f / static_cast<float>(std::max(sceneColor.GetWidth(), 1)),
+            1.0f / static_cast<float>(std::max(sceneColor.GetHeight(), 1))
+        )
+    );
 
     sceneColor.Bind(0);
     bloomColor.Bind(1);

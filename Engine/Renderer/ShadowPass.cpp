@@ -40,6 +40,7 @@ void ShadowPass::Initialize(ResourceManager& resourceManager, ShaderBufferManage
     m_Shader = resourceManager.LoadShader("Shaders/shadow.vert", "Shaders/shadow.frag");
     m_Shader->Use();
     m_Shader->SetUniformBlockBinding("ObjectData", bufferManager.GetBindingPoint(BufferBindingSlot::Object));
+    m_Shader->SetInt("uBaseColorTexture", 1);
     m_ShadowTexture.Allocate(
         kResolution,
         kResolution,
@@ -93,6 +94,16 @@ void ShadowPass::Execute(const RenderWorld& renderWorld, const RenderSubmission&
         if (!batch.mesh)
         {
             continue;
+        }
+
+        const Material* material = batch.material;
+        const float alphaCutoff = material ? material->alphaCutoff : 0.0f;
+        m_Shader->SetFloat("uAlphaCutoff", alphaCutoff);
+        m_Shader->SetFloat("uBaseColorFactorAlpha", material ? material->opacity : 1.0f);
+        m_Shader->SetInt("uHasBaseColorTexture", material && material->baseColorTexture ? 1 : 0);
+        if (material && material->baseColorTexture)
+        {
+            material->baseColorTexture->Bind(1);
         }
 
         for (std::size_t startIndex = 0; startIndex < batch.perObjectDataIndices.size(); startIndex += kMaxObjectMatricesPerDraw)

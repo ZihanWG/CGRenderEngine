@@ -10,7 +10,9 @@
 // higher-level authoring structure that a larger engine might preserve.
 #include "Engine/Assets/GLTFLoader.h"
 
+#include <algorithm>
 #include <cstdint>
+#include <cctype>
 #include <filesystem>
 #include <sstream>
 #include <stdexcept>
@@ -88,30 +90,79 @@ namespace
         std::size_t index
     )
     {
+        if (index >= accessor.count)
+        {
+            throw std::runtime_error("glTF accessor index is out of range.");
+        }
+        if (accessor.sparse.isSparse)
+        {
+            throw std::runtime_error("Sparse glTF accessors are not supported yet.");
+        }
+        if (accessor.bufferView < 0 || accessor.bufferView >= static_cast<int>(model.bufferViews.size()))
+        {
+            throw std::runtime_error("glTF accessor references an invalid buffer view.");
+        }
+
         // glTF accessors can be tightly packed or interleaved. This helper hides that
         // detail so the typed readers below can simply reinterpret the returned bytes.
         const tinygltf::BufferView& bufferView = model.bufferViews[accessor.bufferView];
+        if (bufferView.buffer < 0 || bufferView.buffer >= static_cast<int>(model.buffers.size()))
+        {
+            throw std::runtime_error("glTF buffer view references an invalid buffer.");
+        }
         const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
         const std::size_t stride = accessor.ByteStride(bufferView) != 0
             ? accessor.ByteStride(bufferView)
             : GetComponentCount(accessor.type) * GetComponentSize(accessor.componentType);
 
-        return buffer.data.data() + bufferView.byteOffset + accessor.byteOffset + stride * index;
+        const std::size_t elementSize = GetComponentCount(accessor.type) * GetComponentSize(accessor.componentType);
+        const std::size_t byteOffset = bufferView.byteOffset + accessor.byteOffset + stride * index;
+        if (byteOffset > buffer.data.size() || elementSize > buffer.data.size() - byteOffset)
+        {
+            throw std::runtime_error("glTF accessor reads beyond its buffer.");
+        }
+
+        return buffer.data.data() + byteOffset;
     }
 
-    glm::vec2 ReadVec2Float(
+    float ReadNormalizedComponent(const unsigned char* data, int componentType, bool normalized)
+    {
+        switch (componentType)
+        {
+        case TINYGLTF_COMPONENT_TYPE_FLOAT:
+            return *reinterpret_cast<const float*>(data);
+        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:
+        {
+            const float value = static_cast<float>(*reinterpret_cast<const std::uint8_t*>(data));
+            return normalized ? value / 255.0f : value;
+        }
+        case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT:
+        {
+            const float value = static_cast<float>(*reinterpret_cast<const std::uint16_t*>(data));
+            return normalized ? value / 65535.0f : value;
+        }
+        default:
+            throw std::runtime_error("Unsupported glTF vertex component type.");
+        }
+    }
+
+    glm::vec2 ReadVec2(
         const tinygltf::Model& model,
         const tinygltf::Accessor& accessor,
         std::size_t index
     )
     {
-        if (accessor.componentType != TINYGLTF_COMPONENT_TYPE_FLOAT || accessor.type != TINYGLTF_TYPE_VEC2)
+        if (accessor.type != TINYGLTF_TYPE_VEC2)
         {
-            throw std::runtime_error("Expected a float vec2 accessor.");
+            throw std::runtime_error("Expected a vec2 accessor.");
         }
 
-        const float* data = reinterpret_cast<const float*>(GetAccessorElementPointer(model, accessor, index));
-        return glm::vec2(data[0], data[1]);
+        const unsigned char* data = GetAccessorElementPointer(model, accessor, index);
+        const std::size_t componentSize = GetComponentSize(accessor.componentType);
+        return glm::vec2(
+            ReadNormalizedComponent(data, accessor.componentType, accessor.normalized),
+            ReadNormalizedComponent(data + componentSize, accessor.componentType, accessor.normalized)
+        );
     }
 
     glm::vec3 ReadVec3Float(
@@ -181,7 +232,13 @@ namespace
 
             const glm::vec3 edge1 = v1.position - v0.position;
             const glm::vec3 edge2 = v2.position - v0.position;
-            const glm::vec3 faceNormal = glm::normalize(glm::cross(edge1, edge2));
+            const glm::vec3 faceCross = glm::cross(edge1, edge2);
+            const float faceLength = glm::length(faceCross);
+            if (faceLength <= 1e-8f)
+            {
+                continue;
+            }
+            const glm::vec3 faceNormal = faceCross / faceLength;
 
             v0.normal += faceNormal;
             v1.normal += faceNormal;
@@ -446,6 +503,26 @@ namespace
             const tinygltf::Material& gltfMaterial = model.materials[materialIndex];
             const tinygltf::PbrMetallicRoughness& pbr = gltfMaterial.pbrMetallicRoughness;
 
+            const auto requirePrimaryUvSet = [](int texCoord, const char* textureName) {
+                if (texCoord != 0)
+                {
+                    throw std::runtime_error(
+                        std::string("glTF ") + textureName + " uses TEXCOORD_" +
+                        std::to_string(texCoord) + ", but the renderer currently supports TEXCOORD_0 only."
+                    );
+                }
+            };
+            if (pbr.baseColorTexture.index >= 0)
+                requirePrimaryUvSet(pbr.baseColorTexture.texCoord, "base-color texture");
+            if (pbr.metallicRoughnessTexture.index >= 0)
+                requirePrimaryUvSet(pbr.metallicRoughnessTexture.texCoord, "metallic-roughness texture");
+            if (gltfMaterial.normalTexture.index >= 0)
+                requirePrimaryUvSet(gltfMaterial.normalTexture.texCoord, "normal texture");
+            if (gltfMaterial.occlusionTexture.index >= 0)
+                requirePrimaryUvSet(gltfMaterial.occlusionTexture.texCoord, "occlusion texture");
+            if (gltfMaterial.emissiveTexture.index >= 0)
+                requirePrimaryUvSet(gltfMaterial.emissiveTexture.texCoord, "emissive texture");
+
             if (pbr.baseColorFactor.size() == 4)
             {
                 material.albedo = glm::vec3(
@@ -528,6 +605,10 @@ namespace
                 material.blendMode = MaterialBlendMode::AlphaBlend;
                 material.castShadows = false;
             }
+            else if (gltfMaterial.alphaMode == "MASK")
+            {
+                material.alphaCutoff = static_cast<float>(gltfMaterial.alphaCutoff);
+            }
         }
 
         materialCache.emplace(materialIndex, material);
@@ -545,6 +626,10 @@ namespace
     )
     {
         // Each glTF primitive becomes its own flat decoded render object.
+        if (primitive.mode != TINYGLTF_MODE_TRIANGLES)
+        {
+            throw std::runtime_error("Only triangle-list glTF primitives are currently supported.");
+        }
         const auto positionIt = primitive.attributes.find("POSITION");
         if (positionIt == primitive.attributes.end())
         {
@@ -585,7 +670,7 @@ namespace
 
             if (texCoordAccessor)
             {
-                object.vertices[vertexIndex].texCoord = ReadVec2Float(model, *texCoordAccessor, vertexIndex);
+                object.vertices[vertexIndex].texCoord = ReadVec2(model, *texCoordAccessor, vertexIndex);
             }
 
             if (tangentAccessor)
@@ -609,6 +694,18 @@ namespace
             for (std::size_t index = 0; index < object.vertices.size(); ++index)
             {
                 object.indices[index] = static_cast<std::uint32_t>(index);
+            }
+        }
+
+        if (object.indices.size() % 3 != 0)
+        {
+            throw std::runtime_error("glTF triangle primitive has an index count not divisible by three.");
+        }
+        for (const std::uint32_t index : object.indices)
+        {
+            if (index >= object.vertices.size())
+            {
+                throw std::runtime_error("glTF primitive index is outside the vertex accessor.");
             }
         }
 
@@ -637,6 +734,10 @@ namespace
         std::unordered_map<std::uint64_t, std::shared_ptr<ImageTexture>>& imageTextureCache
     )
     {
+        if (nodeIndex < 0 || nodeIndex >= static_cast<int>(model.nodes.size()))
+        {
+            throw std::runtime_error("glTF node references an invalid child index.");
+        }
         // Traverse the glTF scene graph depth-first and accumulate parent transforms.
         const tinygltf::Node& node = model.nodes[nodeIndex];
         const glm::mat4 worldTransform = parentTransform * BuildNodeLocalMatrix(node);
@@ -685,7 +786,10 @@ std::shared_ptr<DecodedSceneModel> GLTFLoader::DecodeModel(
     std::string errors;
 
     const std::string resolvedPath = ResolveAssetPath(path);
-    const std::string extension = std::filesystem::path(resolvedPath).extension().string();
+    std::string extension = std::filesystem::path(resolvedPath).extension().string();
+    std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char character) {
+        return static_cast<char>(std::tolower(character));
+    });
     const bool loaded = extension == ".glb"
         ? loader.LoadBinaryFromFile(&model, &errors, &warnings, resolvedPath)
         : loader.LoadASCIIFromFile(&model, &errors, &warnings, resolvedPath);
@@ -706,9 +810,11 @@ std::shared_ptr<DecodedSceneModel> GLTFLoader::DecodeModel(
         return nullptr;
     }
 
-    auto decodedModel = std::make_shared<DecodedSceneModel>();
-    std::unordered_map<int, Material> materialCache;
-    std::unordered_map<std::uint64_t, std::shared_ptr<ImageTexture>> imageTextureCache;
+    try
+    {
+        auto decodedModel = std::make_shared<DecodedSceneModel>();
+        std::unordered_map<int, Material> materialCache;
+        std::unordered_map<std::uint64_t, std::shared_ptr<ImageTexture>> imageTextureCache;
 
     const int sceneIndex = model.defaultScene >= 0 ? model.defaultScene : 0;
     if (sceneIndex >= 0 && sceneIndex < static_cast<int>(model.scenes.size()))
@@ -728,8 +834,24 @@ std::shared_ptr<DecodedSceneModel> GLTFLoader::DecodeModel(
     }
     else
     {
+        std::vector<bool> isChild(model.nodes.size(), false);
+        for (const tinygltf::Node& node : model.nodes)
+        {
+            for (const int childIndex : node.children)
+            {
+                if (childIndex >= 0 && childIndex < static_cast<int>(isChild.size()))
+                {
+                    isChild[childIndex] = true;
+                }
+            }
+        }
+
         for (std::size_t nodeIndex = 0; nodeIndex < model.nodes.size(); ++nodeIndex)
         {
+            if (isChild[nodeIndex])
+            {
+                continue;
+            }
             ProcessNode(
                 model,
                 static_cast<int>(nodeIndex),
@@ -741,7 +863,16 @@ std::shared_ptr<DecodedSceneModel> GLTFLoader::DecodeModel(
         }
     }
 
-    return decodedModel;
+        return decodedModel;
+    }
+    catch (const std::exception& exception)
+    {
+        if (errorMessage)
+        {
+            *errorMessage = exception.what();
+        }
+        return nullptr;
+    }
 }
 
 std::shared_future<std::shared_ptr<DecodedSceneModel>> GLTFLoader::DecodeModelAsync(

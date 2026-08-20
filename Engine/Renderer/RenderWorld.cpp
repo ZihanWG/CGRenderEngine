@@ -91,6 +91,7 @@ namespace
         stateId = HashFloat(stateId, material.normalScale);
         stateId = HashFloat(stateId, material.occlusionStrength);
         stateId = HashFloat(stateId, material.opacity);
+        stateId = HashFloat(stateId, material.alphaCutoff);
         stateId = HashPointer(stateId, material.baseColorTexture.get());
         stateId = HashPointer(stateId, material.metallicRoughnessTexture.get());
         stateId = HashPointer(stateId, material.normalTexture.get());

@@ -50,6 +50,8 @@ struct Material
     float normalScale = 1.0f;
     float occlusionStrength = 1.0f;
     float opacity = 1.0f;
+    // Zero disables alpha testing. glTF MASK materials use their authored cutoff.
+    float alphaCutoff = 0.0f;
     MaterialBlendMode blendMode = MaterialBlendMode::Opaque;
     MaterialCullMode cullMode = MaterialCullMode::Back;
     bool castShadows = true;

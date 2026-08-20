@@ -10,6 +10,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 option(CGENGINE_BUILD_EDITOR "Build the editor target" OFF)
+option(CGENGINE_BUILD_TESTS "Build CPU-side engine tests" ON)
 
 add_subdirectory(ThirdParty)
 add_subdirectory(Engine)
@@ -17,4 +18,9 @@ add_subdirectory(Sandbox)
 
 if (CGENGINE_BUILD_EDITOR)
     add_subdirectory(Editor)
+endif()
+
+if (CGENGINE_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(Tests)
 endif()

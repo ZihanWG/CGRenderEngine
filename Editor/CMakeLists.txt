@@ -1,6 +1,7 @@
-add_library(CGEngineEditor INTERFACE)
-add_library(CGEngine::Editor ALIAS CGEngineEditor)
+add_executable(CGEngineEditor
+    main.cpp
+)
 target_link_libraries(CGEngineEditor
-    INTERFACE
+    PRIVATE
         Engine
 )

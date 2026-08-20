@@ -63,6 +63,11 @@ void Window::RequestClose()
     glfwSetWindowShouldClose(m_Window, GLFW_TRUE);
 }
 
+void Window::SetTitle(const char* title)
+{
+    glfwSetWindowTitle(m_Window, title);
+}
+
 void Window::PollEvents()
 {
     glfwPollEvents();

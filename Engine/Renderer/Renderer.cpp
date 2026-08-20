@@ -114,7 +114,12 @@ void Renderer::BuildRenderGraph()
         throw std::runtime_error("Renderer::BuildRenderGraph requires BuildRenderWorld to run first.");
     }
 
-    m_RenderGraph.Clear();
+    // The pass topology is static today. Keep the compiled graph and only refresh
+    // the frame pointers consumed by callbacks; mutations still invalidate Compile().
+    if (m_RenderGraph.IsCompiled())
+    {
+        return;
+    }
     // BuildRenderGraph is intentionally pure scheduling work: it declares pass order
     // and data dependencies, but does not execute the GPU work yet.
     //
@@ -388,7 +393,6 @@ void Renderer::UploadReferenceFrame()
 
 void Renderer::ResetFrameState()
 {
-    m_RenderGraph.Clear();
     m_FrameScene = nullptr;
     m_FrameCamera = nullptr;
     m_FrameRenderWorld = nullptr;

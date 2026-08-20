@@ -51,6 +51,9 @@ Key idea:
 - HDR environment maps can now be loaded asynchronously through `ResourceManager` and finalized into `Scene` once ready
 - glTF content can now be decoded asynchronously into CPU-only `DecodedSceneModel` data, then finalized into runtime meshes/materials on the main thread
 - imported glTF materials are promoted into shared `MaterialAsset` objects plus per-object `MaterialInstance` handles
+- glTF alpha-mask materials preserve their cutoff in both the main and shadow passes
+- normalized integer `TEXCOORD_0` accessors are converted according to the glTF specification
+- unsupported primitive modes, sparse accessors, secondary UV sets, and invalid buffer/index ranges fail with actionable errors instead of rendering corrupted data
 - imported meshes/materials are flattened into a simple list of render objects
 
 Why flatten:
@@ -117,7 +120,7 @@ Frame flow:
 1. `BeginFrame()` updates viewport-dependent renderer state
 2. `BuildRenderWorld()` rebuilds or reuses `RenderSubmission`
 3. `BuildRenderWorld()` computes the light-space matrix for the shadow pass
-4. `BuildRenderGraph()` declares passes and compiles a validated execution plan
+4. `BuildRenderGraph()` declares and compiles the validated execution plan on first use; the fixed topology is reused on later frames
 5. `ExecuteRenderGraph()` kicks or consumes the async CPU reference job and uploads completed reference frames
 6. `ExecuteRenderGraph()` composites to the swapchain framebuffer
 
@@ -148,6 +151,8 @@ Current pass order:
 - `Compile()` automatically derives producer/consumer dependencies from resource reads and writes
 - resource dependency compilation is based on producer/consumer sets, not on pass declaration order
 - `Compile()` validates duplicate pass names, invalid dependencies, missing execute callbacks, dependency cycles, and invalid resource use
+- `Compile()` rejects duplicate resource declarations and same-pass read/write feedback unless the caller creates an explicit output resource version
+- repeated `Compile()` calls are cached until the graph structure changes
 - `Compile()` also builds a resource lifetime table with first use, last use, read count, write count, and target count per resource
 - `Compile()` also builds resource transition metadata for producer/consumer edges, including source pass, destination pass, and read/write/target access types
 - `Compile()` also builds execution levels, grouping passes whose dependencies are satisfied at the same topology depth
@@ -204,6 +209,7 @@ What happens:
 
 - `BloomPass` blurs the bright-pass texture using ping-pong framebuffers
 - `CompositePass` combines scene color + bloom
+- `CompositePass` optionally applies FXAA to the tone-mapped realtime result
 - the same composite shader can also show debug textures or the realtime/reference split view
 
 ## 8. Offline Reference Path
@@ -272,3 +278,14 @@ If you want the shortest route to understanding the project, read in this order:
 10. `Engine/Assets/GLTFLoader.cpp`
 
 That path follows the actual runtime flow instead of reading the repository alphabetically.
+
+## 11. Editor And Regression Tests
+
+The optional `CGEngineEditor` target reuses the same runtime and adds a minimal keyboard-driven editing layer:
+
+- cycle the selected object
+- translate it in world space
+- tune metallic and roughness values
+- observe the selected object in the window title
+
+CPU regression tests live under `Tests` and cover scene/material behavior, RenderGraph compilation and validation, and glTF decoding fixtures. CI builds the sample, editor, and tests before running CTest.

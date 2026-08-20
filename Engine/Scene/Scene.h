@@ -29,6 +29,11 @@ struct RenderObject
     {
         return materialInstance.get();
     }
+
+    Material& ResolveMutableMaterial()
+    {
+        return materialInstance ? materialInstance->GetMutableMaterial() : material;
+    }
 };
 
 class Scene
