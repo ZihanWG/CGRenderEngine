@@ -61,6 +61,19 @@ struct InstancedDrawBatch
     std::vector<std::size_t> perObjectDataIndices;
 };
 
+// Groups already-sorted draw commands into instanced batches.
+//
+// Only adjacent compatible commands merge, which is why the queues are sorted first.
+// With allowInstancing == false every command becomes its own single-instance batch,
+// which is both what the transparent queue needs and what the passes would submit if
+// batching were switched off.
+void BuildDrawBatches(
+    const std::vector<MeshDrawCommand>& commands,
+    std::vector<InstancedDrawBatch>& batches,
+    bool shadowOnly,
+    bool allowInstancing
+);
+
 struct RenderQueue
 {
     std::vector<MeshDrawCommand> shadowCommands;
@@ -74,14 +87,6 @@ struct RenderQueue
     void Reserve(std::size_t visibleObjectCount);
     void Push(MeshDrawCommand command);
     void Sort();
-
-private:
-    static void BuildBatches(
-        const std::vector<MeshDrawCommand>& commands,
-        std::vector<InstancedDrawBatch>& batches,
-        bool shadowOnly,
-        bool allowInstancing
-    );
 };
 
 struct RenderSubmission

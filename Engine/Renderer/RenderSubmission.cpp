@@ -133,12 +133,12 @@ void RenderQueue::Sort()
     sortByKey(opaqueCommands);
     sortByKey(transparentCommands);
 
-    BuildBatches(shadowCommands, shadowBatches, true, true);
-    BuildBatches(opaqueCommands, opaqueBatches, false, true);
-    BuildBatches(transparentCommands, transparentBatches, false, false);
+    BuildDrawBatches(shadowCommands, shadowBatches, true, true);
+    BuildDrawBatches(opaqueCommands, opaqueBatches, false, true);
+    BuildDrawBatches(transparentCommands, transparentBatches, false, false);
 }
 
-void RenderQueue::BuildBatches(
+void BuildDrawBatches(
     const std::vector<MeshDrawCommand>& commands,
     std::vector<InstancedDrawBatch>& batches,
     bool shadowOnly,

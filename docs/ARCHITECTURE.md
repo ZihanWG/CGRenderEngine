@@ -76,6 +76,8 @@ Relevant files:
 - `Engine/Renderer/RenderWorld.cpp`
 - `Engine/Renderer/RenderSubmission.h`
 - `Engine/Renderer/RenderSubmission.cpp`
+- `Engine/Renderer/DrawCallStats.h`
+- `Engine/Renderer/DrawCallStats.cpp`
 
 Key idea:
 
@@ -100,6 +102,7 @@ Current behavior:
 - `RenderSubmission` sorts opaque draws by render state plus material/mesh state and groups contiguous compatible commands into instanced batches
 - transparent draws are depth-sorted but intentionally not instanced so blend order stays stable enough for a forward renderer
 - shadow submission groups by mesh/render state and skips materials that opt out of shadows
+- `CountDrawCalls()` reports how many draw calls a submission costs with and without batching, using the same skip and split rules as the passes; the unbatched figure is measured by re-running `BuildDrawBatches` with instancing disabled, and `docs/BATCHING.md` records the result for a fixed scene
 
 This is the natural place to later add:
 
@@ -288,4 +291,4 @@ The optional `CGEngineEditor` target reuses the same runtime and adds a minimal 
 - tune metallic and roughness values
 - observe the selected object in the window title
 
-CPU regression tests live under `Tests` and cover scene/material behavior, RenderGraph compilation and validation, and glTF decoding fixtures. CI builds the sample, editor, and tests before running CTest.
+CPU regression tests live under `Tests` and cover scene/material behavior, RenderGraph compilation and validation, draw call batching on a fixed scene, and glTF decoding fixtures. CI builds the sample, editor, and tests before running CTest.

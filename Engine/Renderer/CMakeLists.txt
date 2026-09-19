@@ -3,6 +3,8 @@ add_library(CGEngineRenderer STATIC
     BloomPass.h
     CompositePass.cpp
     CompositePass.h
+    DrawCallStats.cpp
+    DrawCallStats.h
     MaterialBinder.cpp
     MaterialBinder.h
     RayTracer.cpp

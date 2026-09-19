@@ -13,6 +13,7 @@ The sample application includes:
 - an asynchronous CPU ray-traced reference image for visual comparison.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the runtime flow and recommended code-reading order.
+For a source-guided visual walkthrough, open [docs/cgengine-interactive-guide.html](docs/cgengine-interactive-guide.html) in a browser.
 
 ## Requirements
 
@@ -49,6 +50,9 @@ The tests are CPU-only and do not require an OpenGL window:
 ```powershell
 ctest --test-dir out/build -C Debug --output-on-failure
 ```
+
+One of them, `draw_call_batching`, measures a fixed scene and locks in how many draw
+calls batching removes (442 -> 35). See [docs/BATCHING.md](docs/BATCHING.md).
 
 ## Controls
 

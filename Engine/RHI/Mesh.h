@@ -23,11 +23,20 @@ struct BoundingSphere
     float radius = 0.0f;
 };
 
+// CPU-only meshes keep their vertex/index data and bounds but never touch OpenGL,
+// so headless tools and tests can build a real scene without a GL context.
+enum class MeshUploadPolicy : std::uint8_t
+{
+    GpuUpload = 0,
+    CpuOnly = 1
+};
+
 class Mesh
 {
 public:
     Mesh(std::vector<Vertex> vertices,
-         std::vector<std::uint32_t> indices);
+         std::vector<std::uint32_t> indices,
+         MeshUploadPolicy uploadPolicy = MeshUploadPolicy::GpuUpload);
     ~Mesh();
 
     Mesh(const Mesh&) = delete;
@@ -39,11 +48,12 @@ public:
     const std::vector<Vertex>& GetVertices() const { return m_Vertices; }
     const std::vector<std::uint32_t>& GetIndices() const { return m_Indices; }
     const BoundingSphere& GetBounds() const { return m_Bounds; }
+    bool IsUploaded() const { return m_VAO != 0; }
     std::uint32_t GetStateId() const { return m_StateId; }
 
-    static std::shared_ptr<Mesh> CreateCube(float size = 1.0f);
-    static std::shared_ptr<Mesh> CreatePlane(float size = 1.0f, float uvScale = 1.0f);
-    static std::shared_ptr<Mesh> CreateSphere(float radius = 1.0f, int xSegments = 24, int ySegments = 16);
+    static std::shared_ptr<Mesh> CreateCube(float size = 1.0f, MeshUploadPolicy uploadPolicy = MeshUploadPolicy::GpuUpload);
+    static std::shared_ptr<Mesh> CreatePlane(float size = 1.0f, float uvScale = 1.0f, MeshUploadPolicy uploadPolicy = MeshUploadPolicy::GpuUpload);
+    static std::shared_ptr<Mesh> CreateSphere(float radius = 1.0f, int xSegments = 24, int ySegments = 16, MeshUploadPolicy uploadPolicy = MeshUploadPolicy::GpuUpload);
     static std::shared_ptr<Mesh> CreateFullscreenQuad();
 
 private:

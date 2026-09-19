@@ -18,17 +18,26 @@ namespace
 }
 
 Mesh::Mesh(std::vector<Vertex> vertices,
-           std::vector<std::uint32_t> indices)
+           std::vector<std::uint32_t> indices,
+           MeshUploadPolicy uploadPolicy)
     : m_Vertices(std::move(vertices)),
       m_Indices(std::move(indices)),
       m_StateId(AcquireMeshStateId())
 {
     ComputeBounds();
-    Upload();
+    if (uploadPolicy == MeshUploadPolicy::GpuUpload)
+    {
+        Upload();
+    }
 }
 
 void Mesh::Draw() const
 {
+    if (m_VAO == 0)
+    {
+        return;
+    }
+
     glBindVertexArray(m_VAO);
     glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(m_Indices.size()), GL_UNSIGNED_INT, nullptr);
     glBindVertexArray(0);
@@ -36,7 +45,7 @@ void Mesh::Draw() const
 
 void Mesh::DrawInstanced(std::size_t instanceCount) const
 {
-    if (instanceCount == 0)
+    if (m_VAO == 0 || instanceCount == 0)
     {
         return;
     }
@@ -71,7 +80,7 @@ Mesh::~Mesh()
     }
 }
 
-std::shared_ptr<Mesh> Mesh::CreateCube(float size)
+std::shared_ptr<Mesh> Mesh::CreateCube(float size, MeshUploadPolicy uploadPolicy)
 {
     // Cube vertices stay duplicated per face so normals/UVs remain correct for hard edges.
     const float h = size * 0.5f;
@@ -116,10 +125,10 @@ std::shared_ptr<Mesh> Mesh::CreateCube(float size)
        20,21,22,20,22,23
     };
 
-    return std::make_shared<Mesh>(std::move(vertices), std::move(indices));
+    return std::make_shared<Mesh>(std::move(vertices), std::move(indices), uploadPolicy);
 }
 
-std::shared_ptr<Mesh> Mesh::CreatePlane(float size, float uvScale)
+std::shared_ptr<Mesh> Mesh::CreatePlane(float size, float uvScale, MeshUploadPolicy uploadPolicy)
 {
     const float h = size * 0.5f;
     std::vector<Vertex> vertices = {
@@ -130,10 +139,10 @@ std::shared_ptr<Mesh> Mesh::CreatePlane(float size, float uvScale)
     };
 
     std::vector<std::uint32_t> indices = {0, 1, 2, 0, 2, 3};
-    return std::make_shared<Mesh>(std::move(vertices), std::move(indices));
+    return std::make_shared<Mesh>(std::move(vertices), std::move(indices), uploadPolicy);
 }
 
-std::shared_ptr<Mesh> Mesh::CreateSphere(float radius, int xSegments, int ySegments)
+std::shared_ptr<Mesh> Mesh::CreateSphere(float radius, int xSegments, int ySegments, MeshUploadPolicy uploadPolicy)
 {
     // UV sphere is sufficient for demo content and keeps the mesh generator compact.
     std::vector<Vertex> vertices;
@@ -184,7 +193,7 @@ std::shared_ptr<Mesh> Mesh::CreateSphere(float radius, int xSegments, int ySegme
         }
     }
 
-    return std::make_shared<Mesh>(std::move(vertices), std::move(indices));
+    return std::make_shared<Mesh>(std::move(vertices), std::move(indices), uploadPolicy);
 }
 
 std::shared_ptr<Mesh> Mesh::CreateFullscreenQuad()
