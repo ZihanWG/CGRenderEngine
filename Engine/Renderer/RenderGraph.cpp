@@ -709,6 +709,44 @@ void RenderGraph::Compile()
     ++m_CompileCount;
 }
 
+namespace
+{
+    // Joins the level's CPU pass jobs even when a graphics pass throws.
+    //
+    // A std::future obtained from std::packaged_task does not block on destruction the way
+    // an std::async future does, so without this guard an exception from a graphics pass
+    // would unwind past the join and leave worker threads running pass callbacks that
+    // reference renderer state the main thread is already tearing down.
+    class CpuPassJoin
+    {
+    public:
+        explicit CpuPassJoin(std::vector<std::future<void>>& futures)
+            : m_Futures(futures)
+        {
+        }
+
+        ~CpuPassJoin()
+        {
+            // wait() rather than get(): this runs during unwinding, where rethrowing a CPU
+            // pass failure would terminate. Futures already consumed by the normal path are
+            // invalid and skipped.
+            for (std::future<void>& future : m_Futures)
+            {
+                if (future.valid())
+                {
+                    future.wait();
+                }
+            }
+        }
+
+        CpuPassJoin(const CpuPassJoin&) = delete;
+        CpuPassJoin& operator=(const CpuPassJoin&) = delete;
+
+    private:
+        std::vector<std::future<void>>& m_Futures;
+    };
+}
+
 void RenderGraph::Execute() const
 {
     if (!m_Compiled)
@@ -720,6 +758,8 @@ void RenderGraph::Execute() const
     {
         std::vector<std::future<void>> cpuFutures;
         cpuFutures.reserve(level.size());
+        // Declared before any pass runs so every early exit out of this level joins.
+        const CpuPassJoin cpuPassJoin(cpuFutures);
 
         for (const RenderGraphPassHandle passHandle : level)
         {

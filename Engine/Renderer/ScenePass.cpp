@@ -203,7 +203,10 @@ void ScenePass::Initialize(
     m_Shader->SetUniformBlockBinding("LightingData", bufferManager.GetBindingPoint(BufferBindingSlot::Lighting));
     m_Shader->SetUniformBlockBinding("MaterialData", bufferManager.GetBindingPoint(BufferBindingSlot::Material));
     m_Shader->SetUniformBlockBinding("ObjectData", bufferManager.GetBindingPoint(BufferBindingSlot::Object));
-    m_BufferManager->InitializeUniformRingBuffer(BufferBindingSlot::Object, sizeof(ObjectUniformData), 1024);
+    // No explicit capacity: the ring starts small and grows to the frame's actual draw
+    // count at the next frame boundary. ObjectUniformData is 8 KiB per element, so a
+    // guessed worst case is the difference between megabytes and tens of megabytes.
+    m_BufferManager->InitializeUniformRingBuffer(BufferBindingSlot::Object, sizeof(ObjectUniformData));
 
     m_SkyShader = resourceManager.LoadShader("Shaders/sky.vert", "Shaders/sky.frag");
     m_SkyShader->Use();

@@ -13,7 +13,7 @@
 void MaterialBinder::Initialize(ShaderBufferManager& bufferManager)
 {
     m_BufferManager = &bufferManager;
-    m_BufferManager->InitializeUniformRingBuffer(BufferBindingSlot::Material, sizeof(MaterialUniformData), 4096);
+    m_BufferManager->InitializeUniformRingBuffer(BufferBindingSlot::Material, sizeof(MaterialUniformData));
 
     // Small fallback textures let shaders stay branch-light even when a material slot is absent.
     const unsigned char whitePixel[] = {255, 255, 255, 255};

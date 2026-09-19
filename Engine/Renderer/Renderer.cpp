@@ -278,6 +278,9 @@ void Renderer::EndFrame()
         return;
     }
 
+    // Fences this frame's uniform ring region. Must run after every pass has issued its
+    // GPU work and before the next BeginFrame rotates to another region.
+    m_ShaderBufferManager.EndFrame();
     ResetFrameState();
     m_FrameActive = false;
 }

@@ -1,6 +1,10 @@
 #include "Tests/TestSupport.h"
 
+#include <atomic>
+#include <chrono>
+#include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "Engine/Renderer/RenderGraph.h"
@@ -72,6 +76,38 @@ int main()
         .Read({duplicate, duplicate})
         .Execute([]() {});
     EXPECT_THROWS(test, duplicateRead.Compile());
+
+    // A graphics pass that throws must still join the CPU jobs its level started. Those
+    // jobs run pass callbacks that reference renderer state, so letting the stack unwind
+    // past them leaves worker threads writing into objects the main thread is destroying.
+    {
+        RenderGraph throwingGraph;
+        const auto cpuInput = throwingGraph.ImportResource("cpu_input", RenderGraphResourceType::CPUData);
+        const auto cpuOutput = throwingGraph.CreateResource("cpu_output", RenderGraphResourceType::CPUData);
+        const auto gpuOutput = throwingGraph.CreateResource("gpu_output", RenderGraphResourceType::Texture);
+
+        std::atomic<bool> cpuPassFinished{false};
+
+        throwingGraph.AddPass("slow_cpu")
+            .Type(RenderGraphPassType::CPU)
+            .Read(cpuInput)
+            .Write(cpuOutput)
+            .Execute([&]() {
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                cpuPassFinished.store(true, std::memory_order_release);
+            });
+
+        // Declares no dependency on the CPU pass, so both land in execution level 0 and the
+        // CPU job is guaranteed to still be in flight when this one throws.
+        throwingGraph.AddPass("throwing_graphics")
+            .Write(gpuOutput)
+            .Execute([]() { throw std::runtime_error("graphics pass failed"); });
+
+        throwingGraph.Compile();
+        EXPECT(test, throwingGraph.GetExecutionLevels().size() == 1);
+        EXPECT_THROWS(test, throwingGraph.Execute());
+        EXPECT(test, cpuPassFinished.load(std::memory_order_acquire));
+    }
 
     const auto extra = graph.ImportResource("extra", RenderGraphResourceType::Texture);
     graph.AddPass("extra_pass").Read(extra).Execute([]() {});
