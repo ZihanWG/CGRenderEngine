@@ -630,6 +630,27 @@ namespace
         {
             throw std::runtime_error("Only triangle-list glTF primitives are currently supported.");
         }
+        if (!primitive.targets.empty())
+        {
+            throw std::runtime_error(
+                "glTF primitive '" + objectName + "' declares " +
+                std::to_string(primitive.targets.size()) +
+                " morph target(s), which are not supported. Export the mesh with its targets "
+                "applied or removed."
+            );
+        }
+
+        // Defence in depth: a mesh can carry skinning attributes even when no node binds a
+        // skin, and importing those vertices as-is would silently drop the deformation.
+        if (primitive.attributes.count("JOINTS_0") != 0 || primitive.attributes.count("WEIGHTS_0") != 0)
+        {
+            throw std::runtime_error(
+                "glTF primitive '" + objectName + "' carries skinning attributes "
+                "(JOINTS_0/WEIGHTS_0), but skinning is not supported. Export the mesh in its "
+                "final pose without a skin."
+            );
+        }
+
         const auto positionIt = primitive.attributes.find("POSITION");
         if (positionIt == primitive.attributes.end())
         {
@@ -725,6 +746,31 @@ namespace
         decodedModel.objects.push_back(std::move(object));
     }
 
+    // Unsupported features get an actionable decode error rather than a silently wrong import.
+    // Skinning and morph targets change the geometry the asset was authored to show, and
+    // animation changes where it sits over time; all three would otherwise come out as a
+    // static, possibly mis-posed mesh with nothing explaining why.
+    void ValidateUnsupportedFeatures(const tinygltf::Model& model)
+    {
+        if (!model.skins.empty())
+        {
+            throw std::runtime_error(
+                "glTF model declares " + std::to_string(model.skins.size()) +
+                " skin(s), but skinning is not supported. Export the mesh in its final pose "
+                "without a skin, or strip the skin from the asset."
+            );
+        }
+
+        if (!model.animations.empty())
+        {
+            throw std::runtime_error(
+                "glTF model declares " + std::to_string(model.animations.size()) +
+                " animation(s), but animation is not supported. Export a single static frame, "
+                "or strip the animations from the asset."
+            );
+        }
+    }
+
     void ProcessNode(
         const tinygltf::Model& model,
         int nodeIndex,
@@ -794,25 +840,30 @@ std::shared_ptr<DecodedSceneModel> GLTFLoader::DecodeModel(
         ? loader.LoadBinaryFromFile(&model, &errors, &warnings, resolvedPath)
         : loader.LoadASCIIFromFile(&model, &errors, &warnings, resolvedPath);
 
-    if (!warnings.empty() && errorMessage)
-    {
-        std::ostringstream warningStream;
-        warningStream << "glTF warnings: " << warnings;
-        *errorMessage = warningStream.str();
-    }
-
     if (!loaded)
     {
         if (errorMessage)
         {
-            *errorMessage = errors.empty() ? "Failed to load glTF model." : errors;
+            // Warnings reach the caller only alongside a failure, where they are useful
+            // context. Writing them out on a successful decode made every caller that reads
+            // a non-empty errorMessage as failure report an error that did not happen.
+            std::ostringstream errorStream;
+            errorStream << (errors.empty() ? "Failed to load glTF model." : errors);
+            if (!warnings.empty())
+            {
+                errorStream << " (glTF warnings: " << warnings << ")";
+            }
+            *errorMessage = errorStream.str();
         }
         return nullptr;
     }
 
     try
     {
+        ValidateUnsupportedFeatures(model);
+
         auto decodedModel = std::make_shared<DecodedSceneModel>();
+        decodedModel->warnings = warnings;
         std::unordered_map<int, Material> materialCache;
         std::unordered_map<std::uint64_t, std::shared_ptr<ImageTexture>> imageTextureCache;
 

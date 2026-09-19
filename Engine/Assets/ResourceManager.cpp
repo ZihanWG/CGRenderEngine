@@ -1,6 +1,7 @@
 // ResourceManager turns path or parameter tuples into shared cached engine assets.
 #include "Engine/Assets/ResourceManager.h"
 
+#include <chrono>
 #include <future>
 #include <sstream>
 #include <stdexcept>
@@ -14,6 +15,35 @@
 
 namespace
 {
+    // Drops the recorded load for `path` once it has finished, so the map only ever holds
+    // genuinely in-flight work.
+    //
+    // This matters most for failures. A finished-and-failed future keeps its stored
+    // exception forever, so without pruning every later request for that path would be
+    // handed the same exception and one transient error -- a locked file, a bad path typed
+    // once -- would become permanent for the life of the process. Successful entries are
+    // dropped for a duller reason: the cache owns the asset by then, and leaving the future
+    // behind pins a second reference and grows the map without bound.
+    //
+    // The caller must hold the mutex guarding the map.
+    template <typename FutureMapT>
+    void PruneCompletedLoad(FutureMapT& loadFutures, const std::string& path)
+    {
+        const auto entry = loadFutures.find(path);
+        if (entry == loadFutures.end())
+        {
+            return;
+        }
+
+        if (entry->second.valid() &&
+            entry->second.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+        {
+            return;
+        }
+
+        loadFutures.erase(entry);
+    }
+
     std::shared_future<std::shared_ptr<EnvironmentImage>> MakeReadyEnvironmentFuture(
         const std::shared_ptr<EnvironmentImage>& environment
     )
@@ -83,6 +113,17 @@ void ResourceManager::WaitForPendingLoads()
         {
             load.wait();
         }
+    }
+
+    // Everything recorded has now finished, so nothing here is in flight any more. Successes
+    // live in the caches; failures are dropped so a later request can retry.
+    {
+        std::lock_guard<std::mutex> lock(m_EnvironmentMutex);
+        m_EnvironmentLoadFutures.clear();
+    }
+    {
+        std::lock_guard<std::mutex> lock(m_DecodedModelMutex);
+        m_DecodedModelLoadFutures.clear();
     }
 }
 
@@ -169,6 +210,10 @@ std::shared_future<std::shared_ptr<EnvironmentImage>> ResourceManager::LoadEnvir
 {
     {
         std::lock_guard<std::mutex> lock(m_EnvironmentMutex);
+        // Prune before the cache check: a completed load is either already represented by the
+        // cache entry below or was a failure that must not be replayed to future callers.
+        PruneCompletedLoad(m_EnvironmentLoadFutures, path);
+
         if (std::shared_ptr<EnvironmentImage> cached = m_EnvironmentCache.Find(path))
         {
             return MakeReadyEnvironmentFuture(cached);
@@ -237,6 +282,8 @@ std::shared_future<std::shared_ptr<DecodedSceneModel>> ResourceManager::LoadDeco
 {
     {
         std::lock_guard<std::mutex> lock(m_DecodedModelMutex);
+        PruneCompletedLoad(m_DecodedModelLoadFutures, path);
+
         if (std::shared_ptr<DecodedSceneModel> cached = m_DecodedModelCache.Find(path))
         {
             return MakeReadyDecodedModelFuture(cached);

@@ -285,6 +285,14 @@ void Application::PumpAsyncLoads()
         try
         {
             std::shared_ptr<DecodedSceneModel> decodedModel = m_PendingModelLoad.get();
+            if (!decodedModel->warnings.empty())
+            {
+                std::cout << "[Assets] glTF warnings for "
+                          << m_PendingModelPath
+                          << ": "
+                          << decodedModel->warnings
+                          << std::endl;
+            }
             loader.AppendDecodedModelToScene(*decodedModel, m_Scene, m_PendingModelRootTransform);
             std::cout << "[Assets] Finalized glTF model asynchronously: "
                       << m_PendingModelPath

@@ -27,6 +27,9 @@ struct DecodedRenderObject
 struct DecodedSceneModel
 {
     std::vector<DecodedRenderObject> objects;
+    // Non-fatal notes from the glTF parser. Kept separate from the decode error so a
+    // successful import never looks like a failure to a caller checking errorMessage.
+    std::string warnings;
 };
 
 class GLTFLoader

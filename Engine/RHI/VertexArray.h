@@ -10,6 +10,12 @@ public:
     VertexArray();
     ~VertexArray();
 
+    // Owns a raw GL name that the destructor deletes, so a copy would delete it twice.
+    // Matches Texture2D/Framebuffer/ShaderBuffer/Mesh, which are non-copyable for the
+    // same reason.
+    VertexArray(const VertexArray&) = delete;
+    VertexArray& operator=(const VertexArray&) = delete;
+
     void Bind() const;
     void Unbind() const;
 

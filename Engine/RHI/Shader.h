@@ -11,6 +11,12 @@ public:
     Shader(const std::string& vertexPath, const std::string& fragmentPath);
     ~Shader();
 
+    // Owns a GL program that the destructor deletes, so a copy would delete it twice.
+    // ResourceManager always hands shaders out as shared_ptr; this turns an accidental
+    // by-value copy into a compile error instead of a double free.
+    Shader(const Shader&) = delete;
+    Shader& operator=(const Shader&) = delete;
+
     void Use() const;
     void SetInt(const std::string& name, int value) const;
     void SetFloat(const std::string& name, float value) const;

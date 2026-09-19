@@ -53,6 +53,8 @@ Key idea:
 - imported glTF materials are promoted into shared `MaterialAsset` objects plus per-object `MaterialInstance` handles
 - glTF alpha-mask materials preserve their cutoff in both the main and shadow passes
 - normalized integer `TEXCOORD_0` accessors are converted according to the glTF specification
+- unsupported glTF features (animation, skinning, morph targets, sparse accessors, secondary UV sets, non-triangle primitives) fail the decode with an actionable message instead of importing a silently wrong static mesh
+- parser warnings travel on `DecodedSceneModel::warnings`; the decode error out-parameter is only written when the decode actually fails
 - unsupported primitive modes, sparse accessors, secondary UV sets, and invalid buffer/index ranges fail with actionable errors instead of rendering corrupted data
 - imported meshes/materials are flattened into a simple list of render objects
 
