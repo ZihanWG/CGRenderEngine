@@ -54,8 +54,12 @@ private:
     // Converts "pressed this frame" behavior into a latched toggle key.
     bool ConsumeToggleKey(int key, bool& latch) const;
 
-    ResourceManager m_ResourceManager;
+    // Declaration order is destruction order in reverse: the window owns the GL context,
+    // so every member holding GPU objects must be declared after it and therefore die
+    // before it. ResourceManager caches Mesh/Shader, which delete GL handles in their
+    // destructors, so it must not outlive the context.
     std::unique_ptr<Window> m_Window;
+    ResourceManager m_ResourceManager;
     std::unique_ptr<Renderer> m_Renderer;
     std::unique_ptr<Camera> m_Camera;
     Scene m_Scene;

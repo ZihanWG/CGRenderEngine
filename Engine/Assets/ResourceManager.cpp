@@ -4,6 +4,7 @@
 #include <future>
 #include <sstream>
 #include <stdexcept>
+#include <vector>
 
 #include "Engine/Assets/EnvironmentLighting.h"
 #include "Engine/Assets/GLTFLoader.h"
@@ -29,6 +30,59 @@ namespace
         std::promise<std::shared_ptr<DecodedSceneModel>> promise;
         promise.set_value(decodedModel);
         return promise.get_future().share();
+    }
+}
+
+ResourceManager::~ResourceManager()
+{
+    WaitForPendingLoads();
+}
+
+void ResourceManager::WaitForPendingLoads()
+{
+    // Jobs submitted by LoadEnvironmentAsync/LoadDecodedModelAsync capture `this` and
+    // touch the caches and mutexes below. JobSystem is a static singleton that outlives
+    // this object, so without this drain a shutdown mid-decode leaves a worker thread
+    // writing into freed memory.
+    //
+    // The futures are copied out before waiting: the job bodies take the same mutexes,
+    // so holding one here would deadlock.
+    std::vector<std::shared_future<std::shared_ptr<EnvironmentImage>>> environmentLoads;
+    {
+        std::lock_guard<std::mutex> lock(m_EnvironmentMutex);
+        environmentLoads.reserve(m_EnvironmentLoadFutures.size());
+        for (const auto& entry : m_EnvironmentLoadFutures)
+        {
+            environmentLoads.push_back(entry.second);
+        }
+    }
+
+    std::vector<std::shared_future<std::shared_ptr<DecodedSceneModel>>> decodedModelLoads;
+    {
+        std::lock_guard<std::mutex> lock(m_DecodedModelMutex);
+        decodedModelLoads.reserve(m_DecodedModelLoadFutures.size());
+        for (const auto& entry : m_DecodedModelLoadFutures)
+        {
+            decodedModelLoads.push_back(entry.second);
+        }
+    }
+
+    // wait() rather than get(): a failed load stores an exception that nobody is
+    // obliged to consume here, and rethrowing out of a destructor would terminate.
+    for (const auto& load : environmentLoads)
+    {
+        if (load.valid())
+        {
+            load.wait();
+        }
+    }
+
+    for (const auto& load : decodedModelLoads)
+    {
+        if (load.valid())
+        {
+            load.wait();
+        }
     }
 }
 

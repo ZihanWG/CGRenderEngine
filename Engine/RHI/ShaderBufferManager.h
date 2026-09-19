@@ -1,6 +1,7 @@
 // Central binding-point registry for the engine's shared shader buffers.
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 
@@ -37,10 +38,26 @@ public:
     template <typename T>
     BufferSlice UploadUniformRing(BufferBindingSlot slot, const T& data)
     {
+        return UploadUniformRing(slot, data, sizeof(T));
+    }
+
+    // Partial-upload overload for blocks the caller only fills a prefix of, such as the
+    // instance matrix array: a batch with 3 instances writes 3 mat4 but the block is
+    // declared as mat4[128], so transferring the whole struct moves 8 KiB to push 192
+    // useful bytes.
+    //
+    // The reserved element and the returned slice still span the full sizeof(T). GL
+    // requires a bound uniform range to cover the block size declared in the shader,
+    // and keeping the stride constant is what keeps `offset` aligned to
+    // GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT. Only the transfer shrinks; the untouched tail
+    // of the element is never read, because the shader indexes it by gl_InstanceID.
+    template <typename T>
+    BufferSlice UploadUniformRing(BufferBindingSlot slot, const T& data, std::size_t uploadSize)
+    {
         const std::size_t slotIndex = static_cast<std::size_t>(slot);
         if (!m_Initialized[slotIndex] || !m_IsRingBuffer[slotIndex] || sizeof(T) > m_ElementStrides[slotIndex])
         {
-            InitializeUniformRingBuffer(slot, sizeof(T), 4096);
+            InitializeUniformRingBuffer(slot, sizeof(T), kRingElementCapacity);
         }
 
         if (m_ElementCursors[slotIndex] + m_ElementStrides[slotIndex] > m_Sizes[slotIndex])
@@ -49,7 +66,11 @@ public:
         }
 
         const std::size_t offset = m_ElementCursors[slotIndex];
-        m_Buffers[slotIndex].SetData(&data, sizeof(T), offset);
+        const std::size_t clampedUploadSize = std::min<std::size_t>(uploadSize, sizeof(T));
+        if (clampedUploadSize > 0)
+        {
+            m_Buffers[slotIndex].SetData(&data, clampedUploadSize, offset);
+        }
         m_ElementCursors[slotIndex] += m_ElementStrides[slotIndex];
 
         return BufferSlice{
@@ -65,6 +86,7 @@ public:
 
 private:
     static constexpr std::size_t kSlotCount = 4;
+    static constexpr std::size_t kRingElementCapacity = 4096;
     void EnsureUniformAlignment();
     std::size_t AlignUniformSize(std::size_t size) const;
 

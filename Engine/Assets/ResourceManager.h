@@ -17,6 +17,17 @@ struct EnvironmentImage;
 class ResourceManager
 {
 public:
+    ResourceManager() = default;
+    // Async decode jobs capture `this`, so no outstanding job may outlive the manager.
+    ~ResourceManager();
+
+    ResourceManager(const ResourceManager&) = delete;
+    ResourceManager& operator=(const ResourceManager&) = delete;
+
+    // Blocks until every in-flight async load has finished. Called by the destructor,
+    // but also available for an explicit drain before shutdown.
+    void WaitForPendingLoads();
+
     std::shared_ptr<Shader> LoadShader(const std::string& vertexPath, const std::string& fragmentPath);
     std::shared_ptr<Mesh> GetFullscreenQuad();
     std::shared_ptr<Mesh> GetCube(float size = 1.0f);

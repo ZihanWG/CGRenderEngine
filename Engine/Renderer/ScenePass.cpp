@@ -326,7 +326,10 @@ void ScenePass::Execute(
                     objectData.modelMatrices[localIndex] = renderWorld.perObjectData[perObjectDataIndex].modelMatrix;
                 }
 
-                const BufferSlice objectSlice = m_BufferManager->UploadUniformRing(BufferBindingSlot::Object, objectData);
+                // Transfer only the matrices this batch actually uses, not all 128 slots.
+                const std::size_t objectUploadSize = instanceCount * sizeof(objectData.modelMatrices[0]);
+                const BufferSlice objectSlice =
+                    m_BufferManager->UploadUniformRing(BufferBindingSlot::Object, objectData, objectUploadSize);
                 m_BufferManager->BindRange(BufferBindingSlot::Object, objectSlice.offset, objectSlice.size);
 
                 ApplyCullMode(batch.material->cullMode);
