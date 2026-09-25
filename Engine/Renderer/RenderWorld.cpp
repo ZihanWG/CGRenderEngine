@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstring>
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -201,6 +202,11 @@ const RenderWorld& RenderWorldCache::Build(
         BuildVisibleLightList(scene);
         BuildVisibleSet();
         UpdatePerViewData();
+
+        // Global rather than per cache, so worlds from two caches can never share a version
+        // and a downstream cache cannot mistake one world's content for another's.
+        static std::atomic<std::uint64_t> s_NextContentVersion{1};
+        m_RenderWorld.contentVersion = s_NextContentVersion.fetch_add(1, std::memory_order_relaxed);
 
         m_BuiltSceneVersion = scene.GetContentVersion();
         m_LastCameraPosition = cameraPosition;

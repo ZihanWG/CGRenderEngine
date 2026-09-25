@@ -102,6 +102,7 @@ Current behavior:
 - `RenderWorld::BuildVisibleSet()` performs frustum culling against mesh bounding spheres
 - `RenderWorld::BuildPassMask()` routes objects into opaque or transparent queues from material render state
 - `RenderSubmission` sorts opaque draws by render state plus material/mesh state and groups contiguous compatible commands into instanced batches
+- `RenderWorldCache` re-extracts and re-culls only when the scene content version, camera position/direction, or viewport changes, and stamps each rebuild with a `contentVersion` that is unique across caches; `RenderSubmissionCache` rebuilds its queues only when that version changes, so a static view reuses both layers
 - transparent draws are depth-sorted but intentionally not instanced so blend order stays stable enough for a forward renderer
 - shadow submission groups by mesh/render state and skips materials that opt out of shadows
 - `CountDrawCalls()` reports how many draw calls a submission costs with and without batching, using the same skip and split rules as the passes; the unbatched figure is measured by re-running `BuildDrawBatches` with instancing disabled, and `docs/BATCHING.md` records the result for a fixed scene

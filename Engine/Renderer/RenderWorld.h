@@ -128,6 +128,11 @@ struct VisibleSet
 
 struct RenderWorld
 {
+    // Identifies one extraction of renderScene/perObjectData/visibleSet. RenderWorldCache
+    // assigns a fresh value, unique across all caches, every time it rebuilds them and keeps
+    // it while it reuses them. 0 means unversioned (a hand-built world): consumers that cache
+    // work derived from a RenderWorld must treat 0 as "always changed".
+    std::uint64_t contentVersion = 0;
     RenderScene renderScene;
     ViewInfo viewInfo;
     VisibleLightList visibleLights;

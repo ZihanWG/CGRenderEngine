@@ -187,9 +187,16 @@ void BuildDrawBatches(
 
 const RenderSubmission& RenderSubmissionCache::Build(const RenderWorld& renderWorld)
 {
-    // Rebuild from scratch for now. The important architectural choice is not the
-    // rebuild strategy, but that all passes consume queues generated from RenderWorld
-    // instead of poking at Scene extraction/culling data directly.
+    // Every input below (scene objects, per-object data, visible set and its view depths)
+    // is rebuilt together with contentVersion, so an unchanged version means an unchanged
+    // submission. Version 0 is a hand-built world with no such guarantee.
+    if (renderWorld.contentVersion != 0 && renderWorld.contentVersion == m_BuiltContentVersion)
+    {
+        return m_Submission;
+    }
+
+    // When it does change, rebuild from scratch. All passes consume queues generated from
+    // RenderWorld instead of poking at Scene extraction/culling data directly.
     m_Submission.renderQueue.Clear();
     m_Submission.sceneVersion = renderWorld.renderScene.sceneVersion;
 
@@ -272,10 +279,13 @@ const RenderSubmission& RenderSubmissionCache::Build(const RenderWorld& renderWo
     }
 
     m_Submission.renderQueue.Sort();
+    m_BuiltContentVersion = renderWorld.contentVersion;
+    ++m_BuildCount;
     return m_Submission;
 }
 
 void RenderSubmissionCache::Invalidate()
 {
     m_Submission = {};
+    m_BuiltContentVersion = 0;
 }

@@ -98,10 +98,16 @@ struct RenderSubmission
 class RenderSubmissionCache
 {
 public:
-    // Draw commands are built from the already-extracted render world every frame.
+    // Draw commands are rebuilt only when the render world's extracted content changed,
+    // i.e. when its contentVersion differs from the one the cached submission was built from.
     const RenderSubmission& Build(const RenderWorld& renderWorld);
     void Invalidate();
 
+    // Number of times Build() actually rebuilt the submission; exposed for regression tests.
+    std::size_t GetBuildCount() const { return m_BuildCount; }
+
 private:
     RenderSubmission m_Submission;
+    std::uint64_t m_BuiltContentVersion = 0;
+    std::size_t m_BuildCount = 0;
 };

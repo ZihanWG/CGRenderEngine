@@ -77,6 +77,56 @@ namespace
         return Measurement{renderWorld.visibleSet.objects.size(), CountDrawCalls(submission)};
     }
 
+    // The submission cache must rebuild exactly when the render world's extracted content
+    // changes, and never serve one world's draw commands for another world.
+    void TestSubmissionCaching(TestContext& test, const Scene& scene)
+    {
+        constexpr int kWidth = 1280;
+        constexpr int kHeight = 720;
+        Camera camera = BatchingScene::BuildCamera(static_cast<float>(kWidth) / static_cast<float>(kHeight));
+
+        RenderWorldCache renderWorldCache;
+        RenderSubmissionCache submissionCache;
+
+        const RenderWorld& firstWorld = renderWorldCache.Build(scene, camera, kWidth, kHeight, 0u, 0.0f, 0.0f);
+        EXPECT(test, firstWorld.contentVersion != 0);
+        const DrawCallStats firstStats = CountDrawCalls(submissionCache.Build(firstWorld));
+        EXPECT(test, submissionCache.GetBuildCount() == 1);
+
+        // Next frame, nothing moved: the render world is reused, so the submission is too.
+        const RenderWorld& sameWorld = renderWorldCache.Build(scene, camera, kWidth, kHeight, 1u, 0.016f, 0.016f);
+        const std::uint64_t reusedVersion = sameWorld.contentVersion;
+        const DrawCallStats reusedStats = CountDrawCalls(submissionCache.Build(sameWorld));
+        EXPECT(test, submissionCache.GetBuildCount() == 1);
+        EXPECT(test, reusedStats == firstStats);
+
+        // A camera move re-culls the world, which must rebuild the submission.
+        camera.MoveRight(3.0f);
+        const RenderWorld& movedWorld = renderWorldCache.Build(scene, camera, kWidth, kHeight, 2u, 0.032f, 0.016f);
+        EXPECT(test, movedWorld.contentVersion != reusedVersion);
+        submissionCache.Build(movedWorld);
+        EXPECT(test, submissionCache.GetBuildCount() == 2);
+
+        // A world from a different cache must never match: versions are unique across caches.
+        RenderWorldCache otherCache;
+        const Scene emptyScene;
+        const RenderWorld& otherWorld = otherCache.Build(emptyScene, camera, kWidth, kHeight, 0u, 0.0f, 0.0f);
+        const RenderSubmission& otherSubmission = submissionCache.Build(otherWorld);
+        EXPECT(test, submissionCache.GetBuildCount() == 3);
+        EXPECT(test, CountDrawCalls(otherSubmission).total.batchedDrawCalls == 0);
+
+        // Invalidate forces the next Build to rebuild even for an unchanged world.
+        submissionCache.Invalidate();
+        submissionCache.Build(otherWorld);
+        EXPECT(test, submissionCache.GetBuildCount() == 4);
+
+        // A hand-built world is unversioned and is rebuilt every time.
+        const RenderWorld handBuilt;
+        submissionCache.Build(handBuilt);
+        submissionCache.Build(handBuilt);
+        EXPECT(test, submissionCache.GetBuildCount() == 6);
+    }
+
     void PrintPass(const char* name, const PassDrawCallStats& stats)
     {
         const double reduction = stats.unbatchedDrawCalls == 0
@@ -146,6 +196,8 @@ int main()
         {"3840x2160", 3840, 2160},
         {"5120x1440", 5120, 1440}
     }};
+
+    TestSubmissionCaching(test, scene);
 
     const Measurement reference = Measure(scene, viewports.front());
     for (const Viewport& viewport : viewports)
