@@ -1,4 +1,6 @@
 add_library(CGEnginePlatform STATIC
+    GLDebug.cpp
+    GLDebug.h
     Window.cpp
     Window.h
 )

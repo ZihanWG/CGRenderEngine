@@ -9,11 +9,13 @@ Read these files in order:
 1. `Sandbox/main.cpp`
 2. `Engine/Runtime/Application.cpp`
 3. `Engine/Platform/Window.cpp`
+4. `Engine/Platform/GLDebug.cpp`
 
 What happens:
 
 - `main.cpp` creates `Application`
 - `Application` creates the window, camera, demo scene, and renderer
+- `Window` requests a debug context and installs the GL debug callback before any other GL call when debug output is on (default in builds without `NDEBUG`, overridable with `CGENGINE_GL_DEBUG`); the glad loader carries no extensions, so `GLDebug.cpp` resolves `GL_KHR_debug` or `GL_ARB_debug_output` itself, filters notifications, rate-limits repeats, and prints a message/error total when the window closes
 - `Application::Run()` drives the frame loop
 - each frame is staged as `BeginFrame -> UpdateSystems -> BuildRenderWorld -> BuildRenderGraph -> ExecuteRenderGraph -> EndFrame`
 

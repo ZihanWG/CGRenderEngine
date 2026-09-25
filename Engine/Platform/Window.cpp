@@ -7,6 +7,8 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
+#include "Engine/Platform/GLDebug.h"
+
 Window::Window(int width, int height, const char* title)
     : m_Width(width), m_Height(height)
 {
@@ -18,6 +20,10 @@ Window::Window(int width, int height, const char* title)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    // A debug context is what makes drivers report errors through the debug callback;
+    // it can cost performance, so it follows the same switch as the callback itself.
+    const bool debugOutputRequested = CGEngine::Platform::IsGLDebugOutputRequested();
+    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, debugOutputRequested ? GLFW_TRUE : GLFW_FALSE);
 
     m_Window = glfwCreateWindow(width, height, title, nullptr, nullptr);
     if (!m_Window)
@@ -39,13 +45,29 @@ Window::Window(int width, int height, const char* title)
         throw std::runtime_error("Failed to initialize GLAD.");
     }
 
-    glViewport(0, 0, width, height);
-
     std::cout << "OpenGL Version: " << glGetString(GL_VERSION) << std::endl;
+    if (debugOutputRequested)
+    {
+        // Installed before any other GL call so nothing the engine does goes unreported.
+        std::cout << CGEngine::Platform::InstallGLDebugOutput() << std::endl;
+        m_DebugOutputInstalled = true;
+    }
+    else
+    {
+        std::cout << "GL debug output: off (set CGENGINE_GL_DEBUG=1 to enable)" << std::endl;
+    }
+
+    glViewport(0, 0, width, height);
 }
 
 Window::~Window()
 {
+    if (m_DebugOutputInstalled)
+    {
+        std::cout << "GL debug output: " << CGEngine::Platform::GetGLDebugReportedCount() << " message(s), "
+                  << CGEngine::Platform::GetGLDebugErrorCount() << " error(s)" << std::endl;
+    }
+
     if (m_Window)
     {
         glfwDestroyWindow(m_Window);

@@ -31,4 +31,5 @@ private:
     int m_Width = 0;
     int m_Height = 0;
     bool m_WasResized = false;
+    bool m_DebugOutputInstalled = false;
 };

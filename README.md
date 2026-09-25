@@ -59,6 +59,21 @@ every shader with `glslangValidator`, builds all targets including the editor, a
 the tests; `full` adds a Release build. See [CONTRIBUTING.md](CONTRIBUTING.md) for the
 modes and the branch, commit, and formatting conventions.
 
+## GL debug output
+
+Debug builds request an OpenGL debug context and log driver messages through
+`GL_KHR_debug` (or `GL_ARB_debug_output`) as they happen, for example:
+
+```text
+[GL high] api error #1280: GL_INVALID_ENUM error generated. ...
+```
+
+The callback is synchronous, so a breakpoint in it stops inside the offending GL
+call. Notifications are ignored, each distinct message is printed at most five
+times, and closing the window prints a total such as
+`GL debug output: 3 message(s), 0 error(s)`. Release builds leave it off. Set
+`CGENGINE_GL_DEBUG=1` or `CGENGINE_GL_DEBUG=0` to force it either way.
+
 ## Controls
 
 - `WASD`, `Q/E`: move the camera
