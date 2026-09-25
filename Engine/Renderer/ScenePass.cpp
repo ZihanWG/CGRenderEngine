@@ -313,6 +313,13 @@ void ScenePass::Execute(
                 continue;
             }
 
+            // Material, cull and blend state are constant across a batch; only the object
+            // matrices change per chunk. Bind them once instead of once per 128-instance chunk.
+            ApplyCullMode(batch.material->cullMode);
+            ApplyBlendMode(batch.material->blendMode);
+            // MaterialBinder owns the uniform block upload and texture fallback policy.
+            m_MaterialBinder.Bind(*batch.material);
+
             for (std::size_t startIndex = 0; startIndex < batch.perObjectDataIndices.size(); startIndex += kMaxObjectMatricesPerDraw)
             {
                 ObjectUniformData objectData{};
@@ -334,11 +341,6 @@ void ScenePass::Execute(
                 const BufferSlice objectSlice =
                     m_BufferManager->UploadUniformRing(BufferBindingSlot::Object, objectData, objectUploadSize);
                 m_BufferManager->BindRange(BufferBindingSlot::Object, objectSlice.offset, objectSlice.size);
-
-                ApplyCullMode(batch.material->cullMode);
-                ApplyBlendMode(batch.material->blendMode);
-                // MaterialBinder owns the uniform block upload and texture fallback policy.
-                m_MaterialBinder.Bind(*batch.material);
                 batch.mesh->DrawInstanced(instanceCount);
             }
         }
