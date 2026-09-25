@@ -44,6 +44,7 @@ unsigned int Shader::CompileShader(unsigned int type, const std::string& source,
     {
         // Include the shader path in the exception so build/runtime failures are actionable.
         glGetShaderInfoLog(shader, 1024, nullptr, infoLog);
+        glDeleteShader(shader);
         throw std::runtime_error("Shader compile error in " + debugName + ": " + infoLog);
     }
 
@@ -56,25 +57,44 @@ Shader::Shader(const std::string& vertexPath, const std::string& fragmentPath)
     std::string vertexCode = ReadFile(vertexPath);
     std::string fragmentCode = ReadFile(fragmentPath);
 
-    unsigned int vertexShader = CompileShader(GL_VERTEX_SHADER, vertexCode, vertexPath);
-    unsigned int fragmentShader = CompileShader(GL_FRAGMENT_SHADER, fragmentCode, fragmentPath);
+    // A throwing constructor never runs the destructor, so every GL name created here
+    // has to be released on the failure paths below or it leaks for the context's lifetime.
+    const unsigned int vertexShader = CompileShader(GL_VERTEX_SHADER, vertexCode, vertexPath);
+    unsigned int fragmentShader = 0;
+    try
+    {
+        fragmentShader = CompileShader(GL_FRAGMENT_SHADER, fragmentCode, fragmentPath);
+    }
+    catch (...)
+    {
+        glDeleteShader(vertexShader);
+        throw;
+    }
 
-    m_ID = glCreateProgram();
-    glAttachShader(m_ID, vertexShader);
-    glAttachShader(m_ID, fragmentShader);
-    glLinkProgram(m_ID);
+    const unsigned int program = glCreateProgram();
+    glAttachShader(program, vertexShader);
+    glAttachShader(program, fragmentShader);
+    glLinkProgram(program);
+
+    // The program keeps what it linked; the stage objects are no longer needed either way.
+    glDetachShader(program, vertexShader);
+    glDetachShader(program, fragmentShader);
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
 
     int success;
     char infoLog[1024];
-    glGetProgramiv(m_ID, GL_LINK_STATUS, &success);
+    glGetProgramiv(program, GL_LINK_STATUS, &success);
     if (!success)
     {
-        glGetProgramInfoLog(m_ID, 1024, nullptr, infoLog);
-        throw std::runtime_error("Program link error: " + std::string(infoLog));
+        glGetProgramInfoLog(program, 1024, nullptr, infoLog);
+        glDeleteProgram(program);
+        throw std::runtime_error(
+            "Program link error (" + vertexPath + ", " + fragmentPath + "): " + std::string(infoLog)
+        );
     }
 
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
+    m_ID = program;
 }
 
 Shader::~Shader()
