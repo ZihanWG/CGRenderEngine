@@ -149,5 +149,13 @@ void Shader::SetUniformBlockBinding(const std::string& blockName, unsigned int b
 
 int Shader::GetUniformLocation(const std::string& name) const
 {
-    return glGetUniformLocation(m_ID, name.c_str());
+    const auto cached = m_UniformLocations.find(name);
+    if (cached != m_UniformLocations.end())
+    {
+        return cached->second;
+    }
+
+    const int location = glGetUniformLocation(m_ID, name.c_str());
+    m_UniformLocations.emplace(name, location);
+    return location;
 }

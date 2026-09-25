@@ -4,6 +4,7 @@
 #include <glm/glm.hpp>
 
 #include <string>
+#include <unordered_map>
 
 class Shader
 {
@@ -30,6 +31,9 @@ private:
     int GetUniformLocation(const std::string& name) const;
 
     unsigned int m_ID = 0;
+    // Uniform locations are fixed once a program links, so each name is looked up once.
+    // Misses (-1) are cached too; glUniform* ignores location -1 by design.
+    mutable std::unordered_map<std::string, int> m_UniformLocations;
 
     static std::string ResolvePath(const std::string& path);
     static std::string ReadFile(const std::string& path);
