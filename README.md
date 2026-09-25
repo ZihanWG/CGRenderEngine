@@ -54,6 +54,11 @@ ctest --test-dir out/build -C Debug --output-on-failure
 One of them, `draw_call_batching`, measures a fixed scene and locks in how many draw
 calls batching removes (442 -> 35). See [docs/BATCHING.md](docs/BATCHING.md).
 
+From a bash shell (Git Bash on Windows), `Tools/dev/verify_renderer.sh fast` validates
+every shader with `glslangValidator`, builds all targets including the editor, and runs
+the tests; `full` adds a Release build. See [CONTRIBUTING.md](CONTRIBUTING.md) for the
+modes and the branch, commit, and formatting conventions.
+
 ## Controls
 
 - `WASD`, `Q/E`: move the camera
@@ -86,3 +91,4 @@ The optional `CGEngineEditor` executable adds keyboard-driven scene editing:
 - `Sandbox`: sample executable
 - `Editor`: optional editor executable
 - `Tests`: CPU-side regression tests
+- `Tools/dev`: the shared verification script
