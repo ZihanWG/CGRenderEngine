@@ -127,10 +127,12 @@ GPU output and frame timings need a run of `Sandbox`, and are separate evidence.
 
 | Check | Workflow | Blocking |
 | --- | --- | --- |
-| Windows Release build + CPU-only tests | `ci.yml` | Yes |
+| Windows (MSVC) Release build + CPU-only tests | `ci.yml` | Yes |
+| Linux (GCC, X11) Release build + CPU-only tests | `ci.yml` | Yes |
+| GLSL validation with `glslangValidator` | `ci.yml` | Yes |
 
-CI does not validate GLSL, check formatting, run clang-tidy, or build on Linux.
-Run `Tools/dev/verify_renderer.sh fast` locally for the shader check.
+CI does not check formatting or run clang-tidy, and never opens a window: GPU
+output still needs a local run of `Sandbox`.
 
 ## Before pushing
 

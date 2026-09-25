@@ -16,3 +16,33 @@ jobs:
       - name: Test
         run: ctest --test-dir out/build -C Release --output-on-failure
 
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      # GLFW's X11 backend headers; Wayland is switched off below so its protocol
+      # tooling is not needed. The tests themselves never open a window.
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl-dev
+      - name: Configure
+        run: >
+          cmake -S . -B out/build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          -DCGENGINE_BUILD_TESTS=ON -DCGENGINE_BUILD_EDITOR=ON -DGLFW_BUILD_WAYLAND=OFF
+      - name: Build
+        run: cmake --build out/build --parallel
+      - name: Test
+        run: ctest --test-dir out/build --output-on-failure
+
+  shaders:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install glslangValidator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends glslang-tools
+      - name: Validate GLSL
+        run: bash Tools/dev/verify_renderer.sh shaders
