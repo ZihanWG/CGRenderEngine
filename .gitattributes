@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Shell scripts must keep LF on checkout: bash reads a CR as part of the command.
+*.sh text eol=lf
