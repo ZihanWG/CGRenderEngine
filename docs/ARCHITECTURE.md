@@ -293,4 +293,4 @@ The optional `CGEngineEditor` target reuses the same runtime and adds a minimal 
 - tune metallic and roughness values
 - observe the selected object in the window title
 
-CPU regression tests live under `Tests` and cover scene/material behavior, RenderGraph compilation and validation, draw call batching on a fixed scene, and glTF decoding fixtures. CI builds the sample, editor, and tests before running CTest.
+CPU regression tests live under `Tests` and cover scene/material behavior, RenderGraph compilation and validation, draw call batching on a fixed scene, glTF decoding fixtures, and RHI wrappers that must construct, move, and destroy without a GL context. CI builds the sample, editor, and tests before running CTest.

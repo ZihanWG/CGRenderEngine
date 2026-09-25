@@ -6,11 +6,15 @@ class Texture2D;
 class Framebuffer
 {
 public:
-    Framebuffer();
+    // Construction makes no GL call; the framebuffer name is created on first use.
+    // That lets a Framebuffer be a member of an object built before the GL context exists.
+    Framebuffer() = default;
     ~Framebuffer();
 
     Framebuffer(const Framebuffer&) = delete;
     Framebuffer& operator=(const Framebuffer&) = delete;
+    Framebuffer(Framebuffer&& other) noexcept;
+    Framebuffer& operator=(Framebuffer&& other) noexcept;
 
     void Bind() const;
     static void Unbind();
@@ -23,6 +27,10 @@ public:
     bool CheckComplete() const;
 
 private:
-    unsigned int m_ID = 0;
+    void Release() noexcept;
+    unsigned int EnsureCreated() const;
+
+    // Mutable so the const binding helpers can create the name lazily on first use.
+    mutable unsigned int m_ID = 0;
     unsigned int m_DepthRenderbuffer = 0;
 };

@@ -1,10 +1,7 @@
 // OpenGL texture allocation and binding helpers for both assets and render targets.
 #include "Engine/RHI/Texture2D.h"
 
-Texture2D::Texture2D()
-{
-    glGenTextures(1, &m_ID);
-}
+#include <utility>
 
 Texture2D::~Texture2D()
 {
@@ -12,6 +9,30 @@ Texture2D::~Texture2D()
     {
         glDeleteTextures(1, &m_ID);
     }
+}
+
+Texture2D::Texture2D(Texture2D&& other) noexcept
+    : m_ID(std::exchange(other.m_ID, 0u))
+    , m_Width(std::exchange(other.m_Width, 0))
+    , m_Height(std::exchange(other.m_Height, 0))
+{
+}
+
+Texture2D& Texture2D::operator=(Texture2D&& other) noexcept
+{
+    if (this != &other)
+    {
+        if (m_ID)
+        {
+            glDeleteTextures(1, &m_ID);
+        }
+
+        m_ID = std::exchange(other.m_ID, 0u);
+        m_Width = std::exchange(other.m_Width, 0);
+        m_Height = std::exchange(other.m_Height, 0);
+    }
+
+    return *this;
 }
 
 void Texture2D::Allocate(
@@ -27,6 +48,11 @@ void Texture2D::Allocate(
     GLenum wrapT
 )
 {
+    if (!m_ID)
+    {
+        glGenTextures(1, &m_ID);
+    }
+
     m_Width = width;
     m_Height = height;
 

@@ -1,33 +1,64 @@
 // Small RAII wrapper around OpenGL framebuffers and their depth renderbuffer, when used.
 #include "Engine/RHI/Framebuffer.h"
 
+#include <utility>
 #include <vector>
 
 #include <glad/glad.h>
 
 #include "Engine/RHI/Texture2D.h"
 
-Framebuffer::Framebuffer()
+Framebuffer::~Framebuffer()
 {
-    glGenFramebuffers(1, &m_ID);
+    Release();
 }
 
-Framebuffer::~Framebuffer()
+Framebuffer::Framebuffer(Framebuffer&& other) noexcept
+    : m_ID(std::exchange(other.m_ID, 0u))
+    , m_DepthRenderbuffer(std::exchange(other.m_DepthRenderbuffer, 0u))
+{
+}
+
+Framebuffer& Framebuffer::operator=(Framebuffer&& other) noexcept
+{
+    if (this != &other)
+    {
+        Release();
+        m_ID = std::exchange(other.m_ID, 0u);
+        m_DepthRenderbuffer = std::exchange(other.m_DepthRenderbuffer, 0u);
+    }
+
+    return *this;
+}
+
+void Framebuffer::Release() noexcept
 {
     if (m_DepthRenderbuffer)
     {
         glDeleteRenderbuffers(1, &m_DepthRenderbuffer);
+        m_DepthRenderbuffer = 0;
     }
 
     if (m_ID)
     {
         glDeleteFramebuffers(1, &m_ID);
+        m_ID = 0;
     }
+}
+
+unsigned int Framebuffer::EnsureCreated() const
+{
+    if (!m_ID)
+    {
+        glGenFramebuffers(1, &m_ID);
+    }
+
+    return m_ID;
 }
 
 void Framebuffer::Bind() const
 {
-    glBindFramebuffer(GL_FRAMEBUFFER, m_ID);
+    glBindFramebuffer(GL_FRAMEBUFFER, EnsureCreated());
 }
 
 void Framebuffer::Unbind()

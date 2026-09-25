@@ -6,11 +6,15 @@
 class Texture2D
 {
 public:
-    Texture2D();
+    // Construction makes no GL call; the texture name is created by the first Allocate().
+    // That lets a Texture2D be a member of an object built before the GL context exists.
+    Texture2D() = default;
     ~Texture2D();
 
     Texture2D(const Texture2D&) = delete;
     Texture2D& operator=(const Texture2D&) = delete;
+    Texture2D(Texture2D&& other) noexcept;
+    Texture2D& operator=(Texture2D&& other) noexcept;
 
     // Allocate immutable dimensions and upload optional initial texel data.
     void Allocate(
