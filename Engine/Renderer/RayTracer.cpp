@@ -9,10 +9,14 @@
 #include "Engine/Renderer/RayTracer.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <cmath>
+#include <exception>
 #include <functional>
 #include <limits>
+#include <system_error>
+#include <thread>
 #include <vector>
 
 #include <glm/gtc/constants.hpp>
@@ -827,6 +831,58 @@ namespace
     }
 }
 
+namespace
+{
+    int ResolveThreadCount(const RayTraceSettings& settings)
+    {
+        int threadCount = settings.threadCount;
+        if (threadCount <= 0)
+        {
+            const unsigned int hardwareThreads = std::thread::hardware_concurrency();
+            threadCount = hardwareThreads > 1 ? static_cast<int>(hardwareThreads) - 1 : 1;
+        }
+
+        return std::clamp(threadCount, 1, std::max(1, settings.height));
+    }
+
+    void TraceRow(
+        const Scene& scene,
+        const SceneAcceleration& acceleration,
+        const Camera& camera,
+        const RayTraceSettings& settings,
+        int y,
+        std::vector<glm::vec3>& pixels
+    )
+    {
+        for (int x = 0; x < settings.width; ++x)
+        {
+            glm::vec3 accumulatedColor(0.0f);
+
+            for (int sample = 0; sample < settings.samplesPerPixel; ++sample)
+            {
+                // Hammersley jitter gives deterministic stratified supersampling without RNG state.
+                const glm::vec2 jitter = Hammersley(
+                    static_cast<unsigned int>(sample),
+                    static_cast<unsigned int>(settings.samplesPerPixel)
+                );
+
+                const float u = (static_cast<float>(x) + jitter.x) / static_cast<float>(settings.width);
+                const float v = (static_cast<float>(y) + jitter.y) / static_cast<float>(settings.height);
+                accumulatedColor += TraceRay(
+                    scene,
+                    acceleration,
+                    Ray{camera.GetPosition(), camera.GenerateRayDirection(u, v)},
+                    0,
+                    settings
+                );
+            }
+
+            pixels[static_cast<std::size_t>(y * settings.width + x)] =
+                accumulatedColor / static_cast<float>(settings.samplesPerPixel);
+        }
+    }
+}
+
 struct RayTracer::CachedAcceleration
 {
     std::size_t geometryHash = 0;
@@ -862,35 +918,74 @@ std::vector<glm::vec3> RayTracer::Render(
     const SceneAcceleration& acceleration = cachedAcceleration.acceleration;
     std::vector<glm::vec3> pixels(static_cast<std::size_t>(settings.width * settings.height));
 
-    // This render is embarrassingly parallel, but kept single-threaded inside the worker task
-    // for simplicity. The outer async job already moves the expensive work off the main thread.
-    for (int y = 0; y < settings.height; ++y)
-    {
-        for (int x = 0; x < settings.width; ++x)
+    // Rows are handed out through an atomic counter so threads that finish cheap rows
+    // (sky) pick up more work instead of idling behind expensive ones (geometry).
+    // Tracing only reads the scene, camera and acceleration structure, and each row
+    // writes a disjoint range of `pixels`, so no further synchronization is needed.
+    std::atomic<int> nextRow{0};
+    const auto traceRows = [&]() {
+        for (int y = nextRow.fetch_add(1, std::memory_order_relaxed); y < settings.height;
+             y = nextRow.fetch_add(1, std::memory_order_relaxed))
         {
-            glm::vec3 accumulatedColor(0.0f);
+            TraceRow(scene, acceleration, camera, settings, y, pixels);
+        }
+    };
 
-            for (int sample = 0; sample < settings.samplesPerPixel; ++sample)
-            {
-                // Hammersley jitter gives deterministic stratified supersampling without RNG state.
-                const glm::vec2 jitter = Hammersley(
-                    static_cast<unsigned int>(sample),
-                    static_cast<unsigned int>(settings.samplesPerPixel)
-                );
+    // Plain threads rather than JobSystem tasks: this already runs on a JobSystem worker,
+    // and blocking a worker on sub-tasks queued to the same pool can deadlock it.
+    const int threadCount = ResolveThreadCount(settings);
+    std::vector<std::thread> helpers;
+    std::vector<std::exception_ptr> helperErrors(static_cast<std::size_t>(threadCount > 1 ? threadCount - 1 : 0));
+    helpers.reserve(helperErrors.size());
+    for (std::size_t helperIndex = 0; helperIndex < helperErrors.size(); ++helperIndex)
+    {
+        try
+        {
+            helpers.emplace_back([&, helperIndex]() {
+                try
+                {
+                    traceRows();
+                }
+                catch (...)
+                {
+                    helperErrors[helperIndex] = std::current_exception();
+                    // Stop the other threads from starting new rows.
+                    nextRow.store(settings.height, std::memory_order_relaxed);
+                }
+            });
+        }
+        catch (const std::system_error&)
+        {
+            // Out of threads: the ones already running, plus this one, finish the image.
+            break;
+        }
+    }
 
-                const float u = (static_cast<float>(x) + jitter.x) / static_cast<float>(settings.width);
-                const float v = (static_cast<float>(y) + jitter.y) / static_cast<float>(settings.height);
-                accumulatedColor += TraceRay(
-                    scene,
-                    acceleration,
-                    Ray{camera.GetPosition(), camera.GenerateRayDirection(u, v)},
-                    0,
-                    settings
-                );
-            }
+    std::exception_ptr callerError;
+    try
+    {
+        traceRows();
+    }
+    catch (...)
+    {
+        callerError = std::current_exception();
+        nextRow.store(settings.height, std::memory_order_relaxed);
+    }
 
-            pixels[static_cast<std::size_t>(y * settings.width + x)] =
-                accumulatedColor / static_cast<float>(settings.samplesPerPixel);
+    for (std::thread& helper : helpers)
+    {
+        helper.join();
+    }
+
+    if (callerError)
+    {
+        std::rethrow_exception(callerError);
+    }
+    for (const std::exception_ptr& error : helperErrors)
+    {
+        if (error)
+        {
+            std::rethrow_exception(error);
         }
     }
 

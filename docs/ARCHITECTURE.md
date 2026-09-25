@@ -230,6 +230,7 @@ Purpose:
 - provide a second renderer to compare against the realtime path
 - reuse the same scene, materials, and environment inputs
 - run asynchronously on `JobSystem` so the main window stays responsive
+- inside that job, trace rows in parallel on plain threads (one fewer than the hardware concurrency by default, `RayTraceSettings::threadCount`); rows are claimed from an atomic counter, and the image is bit-identical for any thread count
 
 Acceleration structure flow:
 
@@ -294,4 +295,4 @@ The optional `CGEngineEditor` target reuses the same runtime and adds a minimal 
 - tune metallic and roughness values
 - observe the selected object in the window title
 
-CPU regression tests live under `Tests` and cover scene/material behavior, RenderGraph compilation and validation, draw call batching on a fixed scene, glTF decoding fixtures, and RHI wrappers that must construct, move, and destroy without a GL context. CI builds the sample, editor, and tests before running CTest.
+CPU regression tests live under `Tests` and cover scene/material behavior, RenderGraph compilation and validation, draw call batching on a fixed scene, glTF decoding fixtures, RHI wrappers that must construct, move, and destroy without a GL context, and a reference tracer whose output must not depend on its thread count. CI builds the sample, editor, and tests before running CTest.

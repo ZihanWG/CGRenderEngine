@@ -16,6 +16,10 @@ struct RayTraceSettings
     int height = 270;
     int samplesPerPixel = 4;
     int maxBounces = 1;
+    // Threads tracing rows in parallel, including the calling thread. 0 picks one fewer
+    // than the hardware concurrency so the realtime frame keeps a core. The image does
+    // not depend on this value: every pixel is traced independently and deterministically.
+    int threadCount = 0;
 };
 
 class RayTracer
